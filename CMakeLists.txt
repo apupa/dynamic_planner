@@ -59,17 +59,11 @@ add_library(dynamic_planner src/dynamic_planner.cpp)
 target_link_libraries(dynamic_planner ${catkin_LIBRARIES})
 add_dependencies(dynamic_planner ${catkin_EXPORTED_TARGETS})
 
-# dynamic_planner code executable
-add_executable(dynamic_planner_node src/dynamic_planner_node.cpp)
-target_link_libraries(dynamic_planner_node dynamic_planner ${catkin_LIBRARIES})
-
-# dynamic_planner_exp code executable
-add_executable(dynamic_planner_exp_node src/dynamic_planner_exp_node.cpp)
-target_link_libraries(dynamic_planner_exp_node dynamic_planner ${catkin_LIBRARIES})
+# node_name code executable
+# add_executable(node_name src/node_name.cpp)
+# target_link_libraries(node_name dynamic_planner ${catkin_LIBRARIES})
 
 ## Install targets
 install(TARGETS 
-  dynamic_planner_node
-  dynamic_planner_exp_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
