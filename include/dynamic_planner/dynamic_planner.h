@@ -122,6 +122,10 @@ public:
       const moveit_msgs::RobotTrajectory DynamicPlanner::getTrajectory();
       const ulong DynamicPlanner::getTrajpoint();
 
+    // Perform inverse kinematics
+      const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
+                                     const std::string& link_name);
+
     // Dynamic planner parameters getter and setter
       DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
       // The 'const' indicates that this member function does not modify the state of the object it is called on.

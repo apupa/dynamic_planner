@@ -82,6 +82,10 @@ DynamicPlanner::DynamicPlanner(
 
 //--------------------- PUBLIC FUNCTIONS -------------------------------------//
 
+//--------------------- VISUALIZATION FUNCTIONS ------------------------------//
+
+// 1)ce.visual_tools_->prompt( TODO
+
 //--------------------- GETTER FUNCTIONS -------------------------------------//
 std::vector<moveit_msgs::CollisionObject>& DynamicPlanner::getCollisionObjects()
 {
@@ -116,6 +120,32 @@ const moveit_msgs::RobotTrajectory DynamicPlanner::getTrajectory()
 const ulong DynamicPlanner::getTrajpoint()
 {
   return trajpoint_;
+}
+
+const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
+                                  const std::string& link_name)
+{
+  // Perform inverse kinematics to find joint positions
+  bool ik_success = robot_state->setFromIK(
+    joint_model_group_,   // group of joints
+    target_pose.pose,     // the pose the last link in the chain needs to achieve
+    10,                   // attempts, default: 1
+    0.1);                 // timeout,  default: 0.0 (no timeout)
+  
+  if (ik_success)
+  {
+    // Get joint values after successful IK
+    std::vector<double> joint_values;
+    robot_state->copyJointGroupPositions(joint_model_group, joint_values);
+
+    // Print joint values
+    ROS_INFO("Joint Values: ");
+    for (size_t i = 0; i < joint_values.size(); ++i)
+    {
+      ROS_INFO("Joint %zu: %f", i, joint_values[i]);
+    }
+  }
+  return joint_values;
 }
 
 //--------------------- SETTER FUNCTIONS -------------------------------------//
@@ -317,7 +347,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
 }
 
 // Planner V5 -> input: as V4 + joint planning group name
-//            -> output: a plan(goal, trajectory), it's the one with this output
+//            -> output: a plan(goal, trajectory), it's the only one with this output
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
                           const std::string& joint_model_group_name)
 {
@@ -327,10 +357,16 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   planning_group_ = joint_model_group_name;
 
   // Update initial robot state for planning request
+  // It's not possible to create a buffer of setpoint positions since robot initial planning state is resetted each time
+  // TODO: what if the user wants to give consecutive goals while the manipulator is moving?
   *robot_state_ = planning_scene_->getCurrentState();
+
+  // Update planning request settings -> TODO: these should be removed because they are already in the private plan() function
+
   // Set joint values for the joint model group (current values are taken from the joint state subscriber)
-  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
-  // Update planning request settings
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_); // -> USELESS? or is it a way to solve the previous TODO?
+  
+  // Robot state update is used to update the moveit request starting state for planning
   request_.group_name                      = joint_model_group_name;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
@@ -351,8 +387,8 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
     goals.push_back(kinematic_constraints::constructGoalConstraints(
       *robot_state_, 
       robot_model_->getJointModelGroup(joint_model_group_name), 
-      0.1,      // below radians absolute tolerance
-      0.1));    // upper radians absolute tolerance
+      0.01,      // below radians absolute tolerance
+      0.01));    // upper radians absolute tolerance
   }
 
   // Calling dynamic planner private function for multiple joint goals
@@ -559,7 +595,6 @@ void DynamicPlanner::checkTrajectory()
   }
 }
 
-// Move Robot function! A JointState msg is published on the MoveIt! fake controller
 // JointState should contain a trajectory already verified as feasible
 /*
   JointState:
@@ -569,6 +604,7 @@ void DynamicPlanner::checkTrajectory()
       float64[] velocity
       float64[] effort
 */
+// Move Robot function! A JointState msg is published on the MoveIt! fake controller
 void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
 {
   joints_pub_.publish(joint_states);
@@ -841,17 +877,10 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
   trajectory_pub_.publish(trajectory_.joint_trajectory);
 
   // Update trajectory visualization
-  ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
-            planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
-  visual_tools_->deleteAllMarkers();
-  if (planning_group_ == planning_group_name_)
-    visual_tools_->publishTrajectoryLine(
-      trajectory_,
-      joint_model_group_->getLinkModel(joint_model_group_->getLinkModelNames().back()),
-      joint_model_group_);
-  visual_tools_->trigger();
+  trajectoryVisualizer(trajectory_)
 }
 
+// Basic private planning function
 void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bool send)
 {
   // Set the goal to the MoveIt planning request
@@ -865,7 +894,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     planning_scene_->processAttachedCollisionObjectMsg(attached_object);
   // adaptJointsLimits(); // make sure start and final poses are reachable
 
-  // Reset
+  // Reset previous planning results
   success_     = false;
   obstruction_ = false;
   trajpoint_   = 0UL;
@@ -885,36 +914,13 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     // If planning was SUCCESSFULL
     else
     {
-      // QUESTION: result_.trajectory_ goes into trajectory_ YES OKK
-      result_.trajectory_->getRobotTrajectoryMsg(trajectory_);
-
-      // Check if the user requests the elevation check AND if it is passed
-      if (elevation_angle_check_ && !checkTrajectoryElevation(trajectory_))
-      {
-        ROS_WARN("Trajectory does not respect the orientation constraint. Trying again "
-                 "(#%d attempt)..",
-                 num_tries + 1);
-        continue;
-      }
-
-      // If the code has passed above checks, planning can be considered successfull
       success_ = true;
 
+      // result_.trajectory_ goes into trajectory_ global class variable
+      result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
+
       // Update trajectory visualization
-      ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
-                planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
-      visual_tools_->deleteAllMarkers();
-      if (planning_group_ == planning_group_name1_)
-        visual_tools_->publishTrajectoryLine(
-          trajectory_,
-          joint_model_group1_->getLinkModel(joint_model_group1_->getLinkModelNames().back()),
-          joint_model_group1_);
-      else
-        visual_tools_->publishTrajectoryLine(
-          trajectory_, 
-          joint_model_group2_->getLinkModel("arm2_wrist_3_link"),
-          joint_model_group2_);
-      visual_tools_->trigger();
+      trajectoryVisualizer(trajectory_)
 
       // If the user (input of the function) want to make the robot move (not just display)
       if (send)
@@ -923,8 +929,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
         trajectory_pub_.publish(trajectory_.joint_trajectory);
 
         // For simulated robot
-        if (sim_)
-          moveRobot(trajectory_);
+        if (sim_) {moveRobot(trajectory_);}
       }
 
       break;
@@ -942,6 +947,8 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   }
 }
 
+// TODO: on my opinion, this function doesn't work neither if goals are given all at once
+// neither if they are given in a secondary moment
 // Robot planner with goals and a given trajectory
 void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_goals,
                           moveit_msgs::RobotTrajectory& robot_trajectory)
@@ -956,7 +963,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
     if (!success_)
       break;
 
-    // If the planner has been successful, go on merging trajectory
+    // If the planner has been successful, trajectory is merged
     merge(robot_trajectory);
     robot_trajectory                         = trajectory_;
     request_.planner_id                      = params_.name;
@@ -965,9 +972,24 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
     request_.max_velocity_scaling_factor     = params_.vel_factor;
     request_.max_acceleration_scaling_factor = params_.acc_factor;
 
-    // The state msg to pass to the planner is taken from start (?) robot state // try to comment OKKKK
+    // The state msg to pass to the planner is taken from start (?) robot state
+    // TODO: WHY THE FOLLOWING LINE IS REPEATED? robot state should be updated !!
     robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
   }
+}
+
+// Visualize on RViz a given trajectory
+void trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory)
+{
+    ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
+                planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
+    visual_tools_->deleteAllMarkers();
+    if (planning_group_ == planning_group_name_)
+      visual_tools_->publishTrajectoryLine(
+        trajectory_,
+        joint_model_group_->getLinkModel(joint_model_group_->getLinkModelNames().back()),
+        joint_model_group_);
+    visual_tools_->trigger();
 }
 
 //---------- ROS Callbacks ---------------------------------------------------//
@@ -984,69 +1006,31 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
 {
   // Map to store couples joint name - joint values
   static std::unordered_map<std::string, double>::iterator it;
-  uint counter_group1  = 0;
-  uint counter_group2  = 0;
-  uint counter_gripper = 0;
-  // I DON'T UNDERSTAND WHY WE SHOULD USE THREE DIFFERENT GROUPS OF PLANNING OKKKK
+  uint counter_group  = 0;
 
   for (uint i = 0; i < joints_state->name.size(); i++)
   {
-    // JOINT GRIPPER GROUP
     // Look for joints group names within joints current state
-    it = joints_map_gripper_.find(joints_state->name[i]);
-    // Exclude last link (gripper  from the search -> usero' ilmio gripper OKKKKKK
-    if (it != joints_map_gripper_.end())  
+    it = joints_map_group_.find(joints_state->name[i]);
+    // Exclude last link (gripper) from the search
+    if (it != joints_map_group_.end())
     {
       // At the second position of the iteration, insert current joint position
       it->second = joints_state->position[i];
-      // Increment the number of joints receveid within the joints state subscriber
-      counter_gripper++;
+      // Increment the number of joints recevied from the joints state subscriber
+      counter_group++;
       // If we have reached the last joint of the group
-      if (counter_gripper == joints_names_gripper_.size())
+      if (counter_group1 == joints_names_group_.size())
       {
         // Iterate over the joints
-        for (uint k = 0; k < joints_names_gripper_.size(); k++)
+        for (uint k = 0; k < joints_names_group_.size(); k++)
           // Store the joints values from the joints map
-          joints_values_gripper_[k] = joints_map_gripper_[joints_names_gripper_[k]];
+          joints_values_group_[k] = joints_map_group_[joints_names_group_[k]];
 
         // Log gripper planning group
-        ROS_INFO_ONCE("%s joints values received.", gripper_name_.c_str());
-        
-        // Confirm of msg reception
-        joints_gripper_received_ = true;
+        ROS_INFO_ONCE("%s joints values received.", planning_group_name_.c_str());
+        joints_group_received_ = true;
       }
-      continue;
     }
-
-    // JOINT GROUP 1 -> same structure as above (only joints_map_group1_ and planning_group_name1_
-    // change). Can we put it into a new function ?
-    it = joints_map_group1_.find(joints_state->name[i]);
-    if (it != joints_map_group1_.end())
-    {
-      it->second = joints_state->position[i];
-      counter_group1++;
-      if (counter_group1 == joints_names_group1_.size())
-      {
-        for (uint k = 0; k < joints_names_group1_.size(); k++)
-          joints_values_group1_[k] = joints_map_group1_[joints_names_group1_[k]];
-        ROS_INFO_ONCE("%s joints values received.", planning_group_name1_.c_str());
-        joints_group1_received_ = true;
-      }
-      continue;
-    }
-
-    // JOINT GROUP 2 -> same structure as above (only joints_map_group2_ and planning_group_name2_
-    // change). Can we put it into a new function ? We can delete continue functions
-    it = joints_map_group2_.find(joints_state->name[i]);
-    if (it == joints_map_group2_.end())
-      continue;
-      it->second = joints_state->position[i];
-      counter_group2++;
-      if (counter_group2 < joints_names_group2_.size())
-        continue;
-      for (uint k = 0; k < joints_names_group2_.size(); k++)
-        joints_values_group2_[k] = joints_map_group2_[joints_names_group2_[k]];
-      ROS_INFO_ONCE("%s joints values received.", planning_group_name2_.c_str());
-      joints_group2_received_ = true;
   }
 }
