@@ -1,12 +1,17 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+
+<package format="3">
   <name>dynamic_planner</name>
-  <version>0.0.1</version>
-  <description>The dynamic_planner package</description>
+  <version>1.2.4</version>
+  <description> Dynamic planner library used for Italo Almirante's internship project, written by Andrea Pupa</description>
+  <maintainer email="255778@studenti.unimore.it">Italo Almirante</maintainer>
+  <maintainer email="apupa@unimore.it">Andrea Pupa</maintainer>
+  <license>Apache License 2.0</license>
 
-  <maintainer email="andrea.pupa@unimore.it">Andrea Pupa</maintainer>
-
-  <license>TODO</license>
+  <url>http://ros.org/wiki/foo_core</url>
+  <author>Andrea Pupa</author>
+  <author>Italo Almirante</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>

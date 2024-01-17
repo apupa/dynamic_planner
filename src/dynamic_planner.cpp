@@ -1,192 +1,99 @@
-// CLASS IMPLEMENTATION OF DYNAMIC PLANNER
+/*
+ * Software License Agreement (Apache Licence 2.0)
+ *
+ *  Copyright (c) [2024], [Andrea Pupa] [italo Almirante]
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   1. Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in
+ *      the documentation and/or other materials provided with the
+ *      distribution.
+ *   3. The name of the author may not be used to endorse or promote
+ *      products derived from this software without specific prior
+ *      written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  Author: [Andrea Pupa] [Italo Almirante]
+ *  Created on: [2024-01-17]
+ */
 
-// IMPORT LIBRARIES
+// CLASS SOURCE IMPLEMENTATION OF DYNAMIC PLANNER
+
+// Import header file (and other useful libraries)
 #include "dynamic_planner/dynamic_planner.h"
 
-// 3 versions of public dynamic planner constructors
-// V1: 4 args, 12 private variables initializers -> ONLY 1 PLANNING GROUP
+// ------------------ CLASS CONSTRUCTOR-------------------- //
 
-// THE CONTENT OF THIS FUNCTION CAN BE REUSED IN ALL THE OTHER 2 FUNCTIONS
-/* EX. V2
-{
-  DynamicPlanner(planning_group1_name, joints_names_group1, v_factor, a_factor)
-  DynamicPlanner(planning_group2_name, joints_names_group2, v_factor, a_factor)
-}
-*/
-/* EX. V3
-{
-  DynamicPlanner(planning_group1_name, joints_names_group1, v_factor, a_factor)
-  DynamicPlanner(planning_group2_name, joints_names_group2, v_factor, a_factor)
-  DynamicPlanner(gripper_name,         joints_names_gripper,v_factor, a_factor)
-}
-*/
-// CON FUNZIONE COSTRUTTORE SUPPLEMENTARE
-
-DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,           
+// V1: 5 args, 8 private variables initializers -> ONLY 1 PLANNING GROUP
+DynamicPlanner::DynamicPlanner(
+                               const std::string& manipulator_name,           
                                const std::vector<std::string>& joints_name,
-                               const double v_factor, const double a_factor)
-  : nh_("~"), planning_group_name1_(manipulator_name), joints_names_group1_(joints_name),
-    trajpoint_(0UL), success_(true), joints_group1_received_(false),
-    joints_group2_received_(true), joints_gripper_received_(true), reversed_joints_(true),
-    obstruction_(false), sim_(false), wrist_goal_constraints_(false)
+                               const double v_factor, const double a_factor,
+                               const bool dynamic_behaviour)
+  : nh_("~"), planning_group_name_(manipulator_name), joints_names_group_(joints_name),
+    trajpoint_(0UL), success_(true), joints_group_received_(false),
+    obstruction_(false), sim_(false), dynamic_behaviour_(dynamic_behaviour)
 {
   // Load ROS pubs/subs, planning scene, robot model and state, visual tools and the planner
   initialize(v_factor, a_factor);
 
   // Initialize joints map for robot state update: per each joint name, set its value to 0
-  for (const std::string& name : joints_names_group1_)
-    joints_map_group1_[name] = 0;
+  for (const std::string& name : joints_names_group_)
+    {joints_map_group_[name] = 0;}
 
-  // Adjust size
-  joints_values_group1_.resize(joints_names_group1_.size());
+  joints_values_group_.resize(joints_names_group_.size());  // Adjust joints values array size
 
-  // Wait until we receive joints values of planning group 1
-  ros::Rate loop_rate(10);
-  // SHOULD THIS BE FROM LAUNCH PARAM 'sample_duration' useful for ubnifporm samplefilter OK
-  // I know that this loop rate is used only to check if ros pubs are ready, but within
-  // this class spinner() function, no other loop rate is set
+  ros::Rate loop_rate(10);  // ROS loop rate definition, just to check readiness of ros pubs
 
-  // Continue ro check readiness of ros pubs
   while (!isReady())
   {
     loop_rate.sleep();
     ros::spinOnce();
   }
 
-  // Update robot state
-  joint_model_group1_ = robot_state_->getJointModelGroup(planning_group_name1_);
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_); // UPDATE OFFICIAL JOINTS STATE
+  // Initialize robot state and its joints values
+  joint_model_group_ = robot_state_->getJointModelGroup(planning_group_name_);
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
 
-  // Move virtual robot to initial position
+  // Move virtual robot to the initial position
   sensor_msgs::JointState initial_pose_msg;
   initial_pose_msg.name     = joints_names_group1_;
   initial_pose_msg.position = joints_values_group1_;
   moveRobot(initial_pose_msg);
 }
 
-// V2: 4 args, 14 private variables initializers -> 2 PLANNING GROUPS
-DynamicPlanner::DynamicPlanner(const std::string& planning_group1_name,
-                               const std::string& planning_group2_name,
-                               const std::vector<std::string>& joints_names_group1,
-                               const std::vector<std::string>& joints_names_group2,
-                               const double v_factor /*=0.2*/,
-                               const double a_factor /*=0.2*/)
-  : nh_("~"), planning_group_name1_(planning_group1_name),
-    planning_group_name2_(planning_group2_name),
-    joints_names_group1_(joints_names_group1), joints_names_group2_(joints_names_group2),
-    trajpoint_(0UL), success_(true), joints_group1_received_(false),
-    joints_group2_received_(false), joints_gripper_received_(true),
-    reversed_joints_(true), obstruction_(false), sim_(false),
-    wrist_goal_constraints_(false)
-{
-  initialize(v_factor, a_factor);
+//--------------------- PUBLIC FUNCTIONS -------------------------------------//
 
-  // Initialize joints map for robot state update (group 1 and 2)
-  for (const std::string& name : joints_names_group1_)
-    joints_map_group1_[name] = 0;
-  joints_values_group1_.resize(joints_names_group1_.size());
-  for (const std::string& name : joints_names_group2_)
-    joints_map_group2_[name] = 0;
-  joints_values_group2_.resize(joints_names_group2_.size());
-
-  // Wait until we receive joints values of both planning groups
-  ros::Rate loop_rate(10);
-  while (!isReady())
-  {
-    loop_rate.sleep();
-    ros::spinOnce();
-  }
-  // Update robot state
-  joint_model_group1_ = robot_state_->getJointModelGroup(planning_group_name1_);
-  joint_model_group2_ = robot_state_->getJointModelGroup(planning_group_name2_);
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);
-  robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-
-  // Move virtual robot to initial position
-  sensor_msgs::JointState initial_pose_msg;
-  initial_pose_msg.name     = joints_names_group1_;
-  initial_pose_msg.position = joints_values_group1_;
-  moveRobot(initial_pose_msg);
-  initial_pose_msg.name     = joints_names_group2_;
-  initial_pose_msg.position = joints_values_group2_;
-  moveRobot(initial_pose_msg);
-}
-
-// V3: 8 args, 16 private variables initializers -> 3 PLANNING GROUPS
-DynamicPlanner::DynamicPlanner(const std::string& planning_group1_name,
-                               const std::string& planning_group2_name,
-                               const std::string& gripper_name,
-                               const std::vector<std::string>& joints_names_group1,
-                               const std::vector<std::string>& joints_names_group2,
-                               const std::vector<std::string>& joints_names_gripper,
-                               const double v_factor /*=0.2*/,
-                               const double a_factor /*=0.2*/)
-  : nh_("~"), planning_group_name1_(planning_group1_name),
-    planning_group_name2_(planning_group2_name), gripper_name_(gripper_name),
-    joints_names_group1_(joints_names_group1), joints_names_group2_(joints_names_group2),
-    joints_names_gripper_(joints_names_gripper), trajpoint_(0UL), success_(true),
-    joints_group1_received_(false), joints_group2_received_(false),
-    joints_gripper_received_(false), reversed_joints_(true), obstruction_(false),
-    sim_(false), wrist_goal_constraints_(false)
-{
-  initialize(v_factor, a_factor);
-
-  // Initialize joints map for robot state update
-  for (const std::string& name : joints_names_group1_)
-    joints_map_group1_[name] = 0;
-  joints_values_group1_.resize(joints_names_group1_.size());
-  for (const std::string& name : joints_names_group2_)
-    joints_map_group2_[name] = 0;
-  joints_values_group2_.resize(joints_names_group2_.size());
-  for (const std::string& name : joints_names_gripper_)
-    joints_map_gripper_[name] = 0;
-  joints_values_gripper_.resize(joints_names_gripper_.size());
-
-  // Wait until we receive joints values of both planning groups
-  ros::Rate loop_rate(10);
-  while (!isReady())
-  {
-    loop_rate.sleep();
-    ros::spinOnce();
-  }
-  // Update robot state
-  joint_model_group1_  = robot_state_->getJointModelGroup(planning_group_name1_);
-  joint_model_group2_  = robot_state_->getJointModelGroup(planning_group_name2_);
-  joint_model_gripper_ = robot_state_->getJointModelGroup(gripper_name_);
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);
-  robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  robot_state_->setJointGroupPositions(joint_model_gripper_, joints_values_gripper_);
-
-  // Move virtual robot to initial position
-  sensor_msgs::JointState initial_pose_msg;
-  initial_pose_msg.name     = joints_names_group1_;
-  initial_pose_msg.position = joints_values_group1_;
-  moveRobot(initial_pose_msg);
-  initial_pose_msg.name     = joints_names_group2_;
-  initial_pose_msg.position = joints_values_group2_;
-  moveRobot(initial_pose_msg);
-  // WHY JOINT MODEL GRIPPER IS NOT MOVED TO THE INITIAL POSITION POSSIAMO RITORNARE AL SOLO ROBOT OK
-  // initial_pose_msg.name     = joints_names_gripper_;
-  // initial_pose_msg.position = joints_values_gripper_;
-  // moveRobot(initial_pose_msg); NON CE' IL GRIPPE RIN SIM
-}
-
-//---------- PUBLIC FUNCTIONS ------------------------------------------------//
-
-// Getter functions (they return a global library variable value)
+//--------------------- GETTER FUNCTIONS -------------------------------------//
 std::vector<moveit_msgs::CollisionObject>& DynamicPlanner::getCollisionObjects()
 {
   return collision_objects_;
 }
 
-std::vector<moveit_msgs::AttachedCollisionObject>&
-DynamicPlanner::getAttachedCollisionObjects()
+std::vector<moveit_msgs::AttachedCollisionObject>& DynamicPlanner::getAttachedCollisionObjects()
 {
   return attached_objects_;
 }
 
-moveit::planning_interface::PlanningSceneInterface&
-DynamicPlanner::getPlanningSceneInterface()
+moveit::planning_interface::PlanningSceneInterface& DynamicPlanner::getPlanningSceneInterface()
 {
   return planning_scene_interface_;
 }
@@ -201,97 +108,80 @@ const moveit_visual_tools::MoveItVisualToolsPtr DynamicPlanner::getVisualToolsPt
   return visual_tools_;
 }
 
-// Setter functions for the Dynamic Planner
-void DynamicPlanner::setParams(const std::string& planner_id, const int attempts,
+const moveit_msgs::RobotTrajectory DynamicPlanner::getTrajectory()
+{
+  return trajectory_;
+}
+
+const ulong DynamicPlanner::getTrajpoint()
+{
+  return trajpoint_;
+}
+
+//--------------------- SETTER FUNCTIONS -------------------------------------//
+
+void DynamicPlanner::setParams(
+                               const std::string& planner_id, const int attempts,
                                const double time, const double v_factor,
                                const double a_factor)
 {
-  // Replace planner parameters within the struct BUT PASSED AS SEPARATE VARIABLES
   params_ = DynamicPlannerParams(planner_id, attempts, time, v_factor, a_factor);
 }
 
 void DynamicPlanner::setParams(const DynamicPlannerParams& params)
 {
-  // Replace planner parameters within the struct PASSED BY A STRUCT
   params_ = params;
 }
 
-// Activation of the elevation check for the EE_link (its implementation 
-// is in the private funcion checkElevationAngle() )
-void DynamicPlanner::activateElevationCheck(const std::string ee_link,
-                                            const double min_elevation_angle)
-{
-  ee_link_name_          = ee_link;
-  min_elevation_angle_   = min_elevation_angle; // Store the desired value in radians
-  elevation_angle_check_ = true;                // Bool enabling
-  // Log and deg conversion for user
-  ROS_INFO("Elevation angle check activated: minimum angle = %.0f [deg]",
-           min_elevation_angle * 180 / M_PI);
-}
-
-void DynamicPlanner::deactivateElevationCheck()
-{
-  // Empty elevation check variables
-  ee_link_name_          = "";
-  min_elevation_angle_   = 1.0;
-  elevation_angle_check_ = false;
-  ROS_INFO("Elevation angle check deactivated");
-}
-
-// Set Joints Limits for trajectory execution
-void DynamicPlanner::setJointsLimits(const std::vector<std::string>& joints_names,
-                                     const std::vector<double>& max_angles,
-                                     const std::vector<double>& min_angles)
+// Set Joints Limits
+void DynamicPlanner::setJointsLimits(
+                                      const std::vector<std::string>& joints_names,
+                                      const std::vector<double>&      max_angles,
+                                      const std::vector<double>&      min_angles)
 {
   // Check the consistency of the user inputs
   // If the assumption is false, the assert function halts 
   // the program and produces a diagnostic message
   assert(joints_names.size() == max_angles.size());
   assert(joints_names.size() == min_angles.size());
-  // I WOULD CHANGE the above statement with a runtime log and go on
-  // with the rest of the function if is not verified
 
   // Limit Change
   const auto ja = robot_model_->getActiveJointModels(); // Get active joints from the model
   // Loop for each joint
   for (uint i = 0; i < ja.size(); i++)
   {
-    const std::vector<std::string> robot_joints_names = ja[i]->getVariableNames();  // Get joints names
-    for (uint j = 0; j < robot_joints_names.size(); j++)    // This should not be just one per joint -> Soft doubt NOMI NON IN ORDINE CON I NUMERI DI GIUNTI
+    // An iteration over robot model joints names and user given names is needed
+    // since user (or robot) can give joints names in the wrong order
+    const std::vector<std::string> robot_joints_names = ja[i]->getVariableNames();  // Get joints names from the model
+    for (uint j = 0; j < robot_joints_names.size(); j++)                            // Get joints names from the arg
+    {
+      // Check all joints
       for (uint k = 0; k < joints_names.size(); k++)
       {
         // If one of the joint names passed to the function is found in the robot model, go on
-        if (joints_names[k] != robot_joints_names[j])     
-          continue;
-        moveit::core::VariableBounds limit =
-          ja[i]->getVariableBounds(robot_joints_names[j]);  // Get the limits of the i-th active joint
-        limit.max_position_ = max_angles[k];                // Max boundary set
-        limit.min_position_ = min_angles[k];                // Min boundary set
-        robot_model_->getJointModel(robot_joints_names[j])  // Update the model with new bounds for the selected joint
-          ->setVariableBounds(robot_joints_names[j], limit);
-        break;
+        if (joints_names[k] == robot_joints_names[j])     
+        {
+          // Get the current limits of the i-th active joint
+          moveit::core::VariableBounds limit = ja[i]->getVariableBounds(robot_joints_names[j]);  
+          limit.max_position_ = max_angles[k];  // Max boundary set
+          limit.min_position_ = min_angles[k];  // Min boundary set
+          // Update the model with new bounds for the selected joint
+          robot_model_->getJointModel(robot_joints_names[j])->setVariableBounds(robot_joints_names[j], limit);
+          break;
+        }
       }
+    }
   }
 }
 
-// Set the boolean value which activates the goal constraint on the wrist to the planner
-void DynamicPlanner::setWristGoalConstraints(const bool value)
-{
-  wrist_goal_constraints_ = value;
-  if (value)
-    ROS_INFO("Adding wrist constraints to goal pose");
-  else
-    ROS_INFO("Removing wrist constraints from goal pose");
-}
-
-// Set path constraints as given by the input arg
-/* 
+/* Constraints msg type
   Constraints : {name, JointConstraint[], PositionConstraint[], OrientationConstraint[], VisibilityConstraint[]}
     JointConstraint:       joint_name, [pos-tol_down, pos+tol_up], weight of importance (woi)
     PositionConstraint:    h, link_name, target_point_offset, constraint_region, woi
     OrientationConstraint: h, desired_orient, link_name, abs_x_tol, abs_y_tol, abs_z_tol, woi
     VisibilityConstraint:  never mind
 */
+// Set path constraints as given by the input arg
 void DynamicPlanner::setPathConstraint(const moveit_msgs::Constraints constraints)
 {
   params_.path_constraints = constraints;
@@ -318,7 +208,7 @@ void DynamicPlanner::setPadding(const double link_padding)
     return;
   }
   auto coll = planning_scene_->getCollisionEnvNonConst();     // Get the representation of the collision robot
-  coll->setPadding(link_padding);                             // Set a padding zone around the robot
+  coll->setPadding(link_padding);                             // Set a padding zone around the robot (in [m])
   planning_scene_->propogateRobotPadding();                   // Update the planning scene
   ROS_INFO("Setting link padding to %.3f [m]", link_padding);
 }
@@ -332,16 +222,19 @@ void DynamicPlanner::setScale(const double link_scale)
     return;
   }
   auto coll = planning_scene_->getCollisionEnvNonConst();     // Get the representation of the collision robot
-  coll->setScale(link_scale);                                 // Set a scale zone around the robot
+  coll->setScale(link_scale);                                 // Set a scale zone around the robot (safe bounding box)
   planning_scene_->propogateRobotPadding();                   // Update the planning scene
   ROS_INFO("Setting link scale to %.3f", link_scale);
 }
 
 // Set sim mode: true for simulation, false for debug
-void DynamicPlanner::setSimMode(const bool value) { sim_ = value; }
+void DynamicPlanner::setSimMode(const bool value) 
+{
+  sim_ = value;
+}
 
 /*
-Before seeing public planners, it's better to look at the composition of the 
+RobotState msg type
 moveit_msgs/RobotState Message
   sensor_msgs/MultiDOFJointState multi_dof_joint_state  : not of our interest
   AttachedCollisionObject[] attached_collision_objects  : nothing new
@@ -354,7 +247,7 @@ moveit_msgs/RobotState Message
     float64[] effort
 */
 
-// PUBLIC PLANNERS: THEY DIFFER ON THE ARG GIVEN BY THE USER
+// --------------------- PUBLIC PLANNERS // -------------------------------------//
 
 // Planner V1 -> input: vector of joints final positions
 void DynamicPlanner::plan(const std::vector<double>& final_position)
@@ -364,28 +257,33 @@ void DynamicPlanner::plan(const std::vector<double>& final_position)
 }
 
 // Planner V2 -> input: as V1 + joint planning group name
-// WE SHOULD REPLACE THE FOLLOWING FUNCTION CODE WITH THESE TWO LINES !!!!!!!!!!  YES 
-  // *robot_state_ = planning_scene_->getCurrentState();
-  // plan(final_position,joint_model_group_name,robot_state_)
 void DynamicPlanner::plan(const std::vector<double>& final_position,
                           const std::string& joint_model_group_name)
 {
+  // Update initial robot stare for planning request
+  *robot_state_ = planning_scene_->getCurrentState();
+
+  // Call planner V3
+  plan(final_position,joint_model_group_name,robot_state_);
+}
+
+// Planner V3 -> input: as V2 + given robot state
+// THE FOLLOWING FUNCTION STUCTURE IS THE SAME AS THE V2, ONLY ROBOT STATE CHANGES
+void DynamicPlanner::plan(const std::vector<double>& final_position,
+                          const std::string& joint_model_group_name,
+                          const robot_state::RobotState& robot_state)
+{
   // Set global class variables as indicated by the function inputs 
   final_position_ = final_position;
-  planning_space_ = JOINTS_SPACE;             // Planning in the joint 6D space
+  planning_space_ = JOINTS_SPACE;
   planning_group_ = joint_model_group_name;
 
-  // UPDATE INITIAL ROBOT STATE FOR PLANNING REQUEST
-  *robot_state_ = planning_scene_->getCurrentState();
-  // Set joint values for the joint model group 1
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);//BEFORE PLANNING SET ROBOT STATE FROM JOITN STATE SUBCRIBER CALLBACK
-  // If there's a planning group 2, overwrite joint values
-  if (!planning_group_name2_.empty())
-    robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  // If there's a gripper, overwrite joints+gripper values
-  if (!gripper_name_.empty())
-    robot_state_->setJointGroupPositions(joint_model_gripper_, joints_values_gripper_);
-  // Update planning request with planning settings and current robot state
+  // Set requested robot state
+  *robot_state_ = robot_state;
+  // Set joint values for the joint model group (current values are taken from the joint state subscriber)
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
+
+  // Update planning request with desired planning settings and current robot state
   request_.group_name                      = joint_model_group_name;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
@@ -400,72 +298,26 @@ void DynamicPlanner::plan(const std::vector<double>& final_position,
   robot_state::RobotState goal_state(*robot_state_);  
   // Specify the final position for a given joint model group to the goal state
   goal_state.setJointGroupPositions(joint_model_group_name, final_position_);
-  // Create a constraint joints goal 
+  // Create a constrained joints goal 
   moveit_msgs::Constraints joints_goal = kinematic_constraints::constructGoalConstraints(
     goal_state, // robot goal state, already filled in 
     robot_model_->getJointModelGroup(joint_model_group_name),
     0.0001,     // below radians tolerance per each joint 
     0.0001);    // above radians tolerance per each joint 
 
-  plan(joints_goal, true);  // Calling dynamic planner private function for single joint goal
-}
+  plan(joints_goal, true);  // Calling dynamic planner private function for single joint goal  
 
-// Planner V3 -> input: as V2 + given robot state
-// THE FOLLOWING FUNCTION STUCTURE IS THE SAME AS THE V2, ONLY ROBOT STATE CHANGES
-void DynamicPlanner::plan(const std::vector<double>& final_position,
-                          const std::string& joint_model_group_name,
-                          const robot_state::RobotState& robot_state)
-{
-  // Set global class variables as indicated by the function inputs 
-  final_position_ = final_position;
-  planning_space_ = JOINTS_SPACE;
-  planning_group_ = joint_model_group_name;
-
-  // UPDATE INITIAL ROBOT STATE FOR PLANNING REQUEST
-  *robot_state_ = robot_state;
-  // Set joint values for the joint model group 1
-  if (planning_group_ != planning_group_name1_)
-    robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);
-    // If there's a planning group 2, overwrite joint values
-  if (planning_group_ != planning_group_name2_ && !planning_group_name2_.empty())
-    robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  // If there's a gripper, overwrite joints+gripper values
-  if (!gripper_name_.empty())
-    robot_state_->setJointGroupPositions(joint_model_gripper_, joints_values_gripper_);
-  // Update planning request with planning settings and current robot state
-  robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
-  request_.group_name                      = joint_model_group_name;
-  request_.planner_id                      = params_.name;
-  request_.allowed_planning_time           = params_.planning_time;
-  request_.num_planning_attempts           = params_.num_attempts;
-  request_.max_velocity_scaling_factor     = params_.vel_factor;
-  request_.max_acceleration_scaling_factor = params_.acc_factor;
-  request_.path_constraints                = params_.path_constraints;
-
-  // BUILD GOAL FROM GOAL STATE
-  // Goal state local variable created with the class constructor
-  robot_state::RobotState goal_state(*robot_state_);
-  // Specify the final position for a given joint model group to the goal state
-  goal_state.setJointGroupPositions(joint_model_group_name, final_position_);
-  // Create a constraint joints goal 
-  moveit_msgs::Constraints joints_goal = kinematic_constraints::constructGoalConstraints(
-    goal_state,   // robot goal state, already filled in 
-    robot_model_->getJointModelGroup(joint_model_group_name), 
-    0.001,        // below radians tolerance per each joint 
-    0.01);        // above radians tolerance per each joint -> THIS IS DIFFERENT, IS IT CORRECT PROBABILMENTE EERRROE OK
-
-  plan(joints_goal, false);
 }
 
 // Planner V4 -> input: multiple joints final positions
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
 {
   // Planner V5 is called here
-  plan(positions, planning_group_name1_);
+  plan(positions, planning_group_name_);
 }
 
 // Planner V5 -> input: as V4 + joint planning group name
-// THIS IS THE ONE FUNCTIONS THAT CALLS THE PLANNER plan(goal, trajectory)
+//            -> output: a plan(goal, trajectory), it's the one with this output
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
                           const std::string& joint_model_group_name)
 {
@@ -476,10 +328,9 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
 
   // Update initial robot state for planning request
   *robot_state_ = planning_scene_->getCurrentState();
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);
-  if (!planning_group_name2_.empty())
-    robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  // Update planning settings
+  // Set joint values for the joint model group (current values are taken from the joint state subscriber)
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
+  // Update planning request settings
   request_.group_name                      = joint_model_group_name;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
@@ -489,7 +340,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   request_.path_constraints                = params_.path_constraints;
   robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
 
-  // Create a vector of multiple constraints as goals
+  // Create a vector of multiple constrained goals
   std::vector<moveit_msgs::Constraints> goals;
   // For each goal of the array 'positions' given by the user
   for (const auto& position : positions)
@@ -498,12 +349,15 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
     robot_state_->setJointGroupPositions(joint_model_group_name, position);
     // Add a kinematic constraint with HIGHER TOLERANCE than Planner V3
     goals.push_back(kinematic_constraints::constructGoalConstraints(
-      *robot_state_, robot_model_->getJointModelGroup(joint_model_group_name), 0.1, 0.1));
+      *robot_state_, 
+      robot_model_->getJointModelGroup(joint_model_group_name), 
+      0.1,      // below radians absolute tolerance
+      0.1));    // upper radians absolute tolerance
   }
 
-  plan(goals, trajectory_); // Calling dynamic planner private function for multiple joint goals
+  // Calling dynamic planner private function for multiple joint goals
+  plan(goals, trajectory_);
 
-  // WHY THIS VARIABLE 'trajectory_' LOOKS ME EMPTY ?
 }
 
 // Planner V6 -> input: 3D carthesian final pose, link_name
@@ -511,71 +365,20 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
                           const std::string& link_name)
 {
   // The planner V7 is called here
-  plan(final_pose, link_name, planning_group_name1_);
+  plan(final_pose, link_name, planning_group_name_);
 }
 
 // Planner V7 -> inputs: as V6 + joint planning group name
-// THE FOLLOWING FUNCTION CODE SHOULD BE CHANGED WITH THESE TWO LINES YEASH OK
-  // *robot_state_ = planning_scene_->getCurrentState();
-  // plan(final_pose,link_name,joint_model_group_name,robot_state)
 void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
                           const std::string& link_name,
                           const std::string& joint_model_group_name)
 {
-  // Update class global variables
-  final_pose_         = final_pose;
-  planning_space_     = CARTESIAN_SPACE;
-  planning_link_name_ = link_name;
-  planning_group_     = joint_model_group_name;
-
-  // Fill the header frame with the default value "world" 
-  if (final_pose_.header.frame_id == "")
-    final_pose_.header.frame_id = "world";
-
-  // UPDATE INITIAL ROBOT STATE FOR PLANNING REQUEST -> THIS SECTION SHOULD BE A SEPARATE FUNCTION
+  // Update current robot state for planning
   *robot_state_ = planning_scene_->getCurrentState();
-  // Set joint values for the joint model group 1
-  robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);  
-  // If there's a planning group 2, overwrite joint values
-  if (!planning_group_name2_.empty())
-    robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  // If there's a gripper+joint planning group, overwrite joint values  
-  if (!gripper_name_.empty())
-    robot_state_->setJointGroupPositions(joint_model_gripper_, joints_values_gripper_);
-  // Update planning request with planning settings and current robot state
-  request_.group_name                      = joint_model_group_name;
-  request_.planner_id                      = params_.name;
-  request_.allowed_planning_time           = params_.planning_time;
-  request_.num_planning_attempts           = params_.num_attempts;
-  request_.max_velocity_scaling_factor     = params_.vel_factor;
-  request_.max_acceleration_scaling_factor = params_.acc_factor;
-  request_.path_constraints                = params_.path_constraints;
-  robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
+  
+  // Call planner V8
+  plan(final_pose,link_name,joint_model_group_name,robot_state);
 
-  // Create a 3D goal constraint
-  goal_ =
-    kinematic_constraints::constructGoalConstraints(
-      link_name,    // The link name for both constraints 
-      final_pose_,  // The pose stamped to be used for the target region
-      0.001,        // TOLERANCE POS: the dimension of the sphere associated with the target region of the PositionConstraint
-      0.001);       // TOLERANCE ANGLE: the value to assign to the absolute tolerances of the OrientationConstraint
-                    // NOTE: THIS LAST VALUE CAN BE VERY STRICT !!!!!
-
-  // Add a wrist goal constraint if specified by the user
-  if (wrist_goal_constraints_)
-  {
-    // Set a new joint constraint
-    moveit_msgs::JointConstraint wrist_constraint;
-    wrist_constraint.joint_name      = "arm2_wrist_1_joint";
-    wrist_constraint.weight          = 1;
-    wrist_constraint.position        = -1.6;
-    wrist_constraint.tolerance_above = 0.4;
-    wrist_constraint.tolerance_below = wrist_constraint.tolerance_above;
-    // Add the joint constraint to do goal constraints list
-    goal_.joint_constraints.push_back(wrist_constraint);
-  }
-
-  plan(goal_, true);  // Call the dynamic planner private function for a single goal
 }
 
 // Planner V8 -> inputs: as V7 + robot state
@@ -583,7 +386,7 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
                           const std::string& link_name,
                           const std::string& joint_model_group_name,
                           const robot_state::RobotState& robot_state)
-{
+{  
   // Update class global variables
   final_pose_         = final_pose;
   planning_space_     = CARTESIAN_SPACE;
@@ -594,19 +397,11 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
   if (final_pose_.header.frame_id == "")
     final_pose_.header.frame_id = "world";
 
-  // UPDATE INITIAL ROBOT STATE FOR PLANNING REQUEST -> THIS SECTION SHOULD BE A SEPARATE FUNCTION
+  // Get robot state as requested by the user
   *robot_state_ = robot_state;
-  // Set joint values for the joint model group 1
-  if (planning_group_ != planning_group_name1_)
-    robot_state_->setJointGroupPositions(joint_model_group1_, joints_values_group1_);
-  // If there's a planning group 2, overwrite joint values
-  if (planning_group_ != planning_group_name2_ && !planning_group_name2_.empty())
-    robot_state_->setJointGroupPositions(joint_model_group2_, joints_values_group2_);
-  // If there's a gripper+joint planning group, overwrite joint values  
-  if (!gripper_name_.empty())
-    robot_state_->setJointGroupPositions(joint_model_gripper_, joints_values_gripper_);
+  // Set joint values for the joint model group
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
   // Update planning request with planning settings and current robot state
-  robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
   request_.group_name                      = joint_model_group_name;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
@@ -614,41 +409,34 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
   request_.max_velocity_scaling_factor     = params_.vel_factor;
   request_.max_acceleration_scaling_factor = params_.acc_factor;
   request_.path_constraints                = params_.path_constraints;
+  robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
 
   // Create a 3D goal constraint
-  goal_ =
-    kinematic_constraints::constructGoalConstraints(
-      link_name,    // The link name for both constraints 
-      final_pose_,  // The pose stamped to be used for the target region
-      0.001,        // TOLERANCE POS: the dimension of the sphere associated with the target region of the PositionConstraint
-      0.001);       // TOLERANCE ANGLE: the value to assign to the absolute tolerances of the OrientationConstraint
-                    // NOTE: THIS LAST VALUE CAN BE VERY STRICT !!!!!
+  goal_ = kinematic_constraints::constructGoalConstraints(
+            link_name,    // The link name for both constraints 
+            final_pose_,  // The pose stamped to be used for the target region
+            0.001,        // TOLERANCE POS: the dimension of the sphere associated with the target region of the PositionConstraint
+            0.01);        // TOLERANCE ANGLE: the value to assign to the absolute tolerances of the OrientationConstraint!
 
-  // Add a wrist goal constraint if specified by the user
-  if (wrist_goal_constraints_)
-  {
-    // Set a new joint constraint
-    moveit_msgs::JointConstraint wrist_constraint;
-    wrist_constraint.joint_name      = "arm2_wrist_1_joint";
-    wrist_constraint.weight          = 1;
-    wrist_constraint.position        = -1.6;
-    wrist_constraint.tolerance_above = 0.4;
-    wrist_constraint.tolerance_below = wrist_constraint.tolerance_above;
-    // Add the joint constraint to do goal constraints list
-    goal_.joint_constraints.push_back(wrist_constraint);
-  }
-  plan(goal_, false); // Call the dynamic planner private function for a single goal
+  // Call the dynamic planner private function for a single goal
+  plan(goal_, true);
+
 }
 
 // THE LAST VERSION SHOULD MISS: THE CORRESPONDING PLANNER IN THE 3D SPACE OF THE V5
+// Easy to create by calling the V5 after inverse kynematics of all the 3D points
 
-// THIS FUNCTION IS NEVER CALLED BY ANOTHER FUNCTION IN THIS CLASS
-// SHOULD IT BE CALLED TOGETHER WITH THE SPINNER 
-// OK IF YOU DON'T WANT THE DYNAMIC 
-// Recompute trajectory if an obstacle is found on the path
+// Check trajectory function: individuate an invalide state and correct trajectory online
 void DynamicPlanner::checkTrajectory()
 {
-  // If another functions has told that there is an obstruction along the path
+
+  // Check if the user has set the dynamic behaviour within the constructor: if not so, block the function
+  if (!dynamic_behaviour_)
+  {
+    return;
+  }
+
+  // If another functions has told that there is an obstruction along the path, try to compute a new feasible trajectory
   if (obstruction_)
   {
     // Try to complete the interrupted trajectory when the dynamic obstacle moves away
@@ -667,44 +455,50 @@ void DynamicPlanner::checkTrajectory()
     }
 
     // The above 'switch' is called once, so 'plan' is called once
-    // The 'plan' function modifies the 'success', which is the negative boolean of 'obstruction'
-    // If successfull, the 'plan' function fills the trajectory_ variable
+    // The 'plan' function modifies the 'success', so it becoms the negative boolean of 'obstruction'
+    // If successfull, the 'plan' function fills the trajectory_ global class variable
     obstruction_ = !success_;
     return;
   }
 
-  // If previous planning has not been successfull -> but it doensn't enter here in this iteration ? Soft doubt
+  // If previous planning has not been successfull, stop planning and trajectory execution
   if (!success_)
   {
     ROS_WARN_THROTTLE(3, "No feasible trajectory pending.");
     return;
   }
 
-  // IF THERE IS NOT A KNOWN OBSTRUCTION OR A PREVIOUS OR A PREVIOUS PLANNING HAS NOT BEEN
-  // SUCCESSFULL, ABOVE CODE IS NOT EXECUTED AND checkTrajectory() STARTS HERE YES OK
+  // If there's not a known obstruction and previous planning has been successfull, just check if something has changed
+  // If between previous and current ROS spin, an obstacle is put along currently executing path, try to compute a new trajectory 
 
   // If current trajectory point is higher than the trajectory computed size, no more trajectory computation is needed
-  if (trajpoint_ >= (trajectory_.joint_trajectory.points.size() - 1)) // PUNTI DELLA TRAIETTORIA OKKKK
+  if (trajpoint_ >= (trajectory_.joint_trajectory.points.size() - 1))
   {
     ROS_WARN_THROTTLE(3, "Trajectory complete or no trajectory pending.");
     return;
   }
 
-  // IF WE ARRIVED HERE WITH THIS CODE, WE THINK THERE IS NO OBSTRUCTION AND WE TRY TO
-  // FIND IF THERE IS A DYNAMIC OBSTACLE ALONG THE PATH
+  // If we arrived here with this code, we think there is no obstruction and we try
+  // to find if there is a dynamic obstacle along the path
 
   // Create a new moveit object robot trajectory using the robot trajectory constructor
-  moveit_msgs::RobotTrajectory robot_trajectory(trajectory_);
-  ulong size  = robot_trajectory.joint_trajectory.points.size();
-  ulong bound = std::min(size / 3, size - trajpoint_);          // HEURISTICS OK 
+  moveit_msgs::RobotTrajectory robot_trajectory(trajectory_);   // trajectory_ value GOES INTO robot_trajectory
+  ulong size  = robot_trajectory.joint_trajectory.points.size();// trajectory size
+  ulong bound = std::min(size / 3, size - trajpoint_);          // heuristics: look a bit AHEAD of current trajectory point executing
+  // Look for obstacles ahead of 1/3 of the trajectory length, or, if less the 1/3 of the trajectory is remained,
+  // check all the remaining trajectory
 
-  // Get current robot state and copy it into the local variable robot_state (WITHOUT _ !!!)
+  // Get current robot state and copy it into the local variable robot_state
   robot_state::RobotState robot_state = *robot_state_;
 
-  // Iterate between current trajectory point and the given bound
+  // COULD ME MORE EFFICIENT TO UPDATE ITERATOR OF A CERTAIN STEP NOT UNIT ?
+  // WHAT IS TRAJECTORY RESOLUTION? WHAT IS OBSTACLE RESOLUTION?
+  // CAN WE CHECK TRAJECTORY ONLY IF WE GET THAT PLANNING SCENE IS ACTUALLY CHANGED?
+
+  // Iterate between current trajectory point and the given bound 
   for (ulong i = trajpoint_; i < trajpoint_ + bound; ++i)
   {
-    // Update Joint Positions as they were the current robot state for each iteration
+    // Update Joint Positions into robot state for each iteration
     // so isStateColliding() function can be used to check a future collision
     robot_state.setJointGroupPositions(
       planning_group_, robot_trajectory.joint_trajectory.points[i].positions);
@@ -713,21 +507,28 @@ void DynamicPlanner::checkTrajectory()
     if (planning_scene_->isStateColliding(robot_state, planning_group_, false))
     {
       ROS_WARN("Detected future collision with planning group %s in current trajectory: "
-               "replanning..",
-               planning_group_.c_str());
+               "replanning..", planning_group_.c_str());
+
       // Store the state related to the collision incoming
       invalid_state_ = i;
-      // HEURISTICS OK Take a trajectory point a little bit before the collision point
-      ulong k        = (invalid_state_ - trajpoint_) / 2;
+
+      // Heuristics: take a trajectory point a little bit before the collision point
+      ulong k = (invalid_state_ - trajpoint_) / 2;
+
       // ERASE the trajectory between point k (near before the collision) and the end
       robot_trajectory.joint_trajectory.points.erase(
         robot_trajectory.joint_trajectory.points.begin() + static_cast<long>(invalid_state_ - k),
+        // above raw could be replaced by robot_trajectory.joint_trajectory.points[static_cast<long>((inv_state+trajpoint_)/2)]
         robot_trajectory.joint_trajectory.points.end());
+
+      // Within robot_trajectory, the path remained goes from the start to THE MIDDLE POINT BETWEEN the invalid state and current trajpoint
+
       // Store the new trajectory (just cut) in the robot state
-      moveit::core::jointTrajPointToRobotState(
-        robot_trajectory.joint_trajectory,
-        robot_trajectory.joint_trajectory.points.size() - 1, robot_state);
-      // Rapidly try planning the first time (on-the-fly) -> CAN THIS SWITCH BE A NEW FUNCTION YES OK
+      moveit::core::jointTrajPointToRobotState( robot_trajectory.joint_trajectory,
+                                                robot_trajectory.joint_trajectory.points.size() - 1, 
+                                                robot_state);
+
+      // Try to plan from the set robot state to the goal to find a feasible path that avoids the obstacle(s)
       switch (planning_space_)
       {
         case JOINTS_SPACE:
@@ -740,27 +541,18 @@ void DynamicPlanner::checkTrajectory()
           break;
       }
 
-      // If above planning has been successfull
+      // If above planning has been successfull, success_ became true and trajectory_ global class variable
+      // has been filled with the path BETWEEN K AND THE END, while in robot_trajectory local variable there is
+      // the path BETWEEN BEGIN AND K (obtained by previously cut entire old trajectory_)
       if (success_)
-        // Get new overall trajectory, since the planning was between point k and goal, 
-        // but we want from start to goal
-        merge(robot_trajectory); //VELOCITA' E ACCELERAZIONE CONTINUEEE OKKK 
-        // Remember that robot_trajectory is a local variable within checkTrajectory() function
-        // but within the above function 'merge', the new part of the trajectory from k to goal
-        // is merged with the initial part of the trajectory and put into the global class
-        // variable trajectory_
+      {
+        merge(robot_trajectory); 
+      }        
       else  // If above planning has not been successfull
       {
-        // The failed planning triggered a stop command to be published so we need to
-        // recompute a new trajectory
+        // We'll try replanning from start to goal a completely different trajectory 
         obstruction_ = true;
         ROS_WARN("Obstruction found");
-        
-        // Given that obstruction_ variable is again true, the first part of the code of this
-        // function will be executed at the next call of checkTrajectory()
-        // The 'switch' block of planning will take robot_state_ (current) as default for planning
-        // In other words, if planning from k to goal didn't work, 
-        // we'll try replanning from start to goal a completely different trajectory 
       }
       break;
     }
@@ -799,26 +591,30 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
 
-  // MoveRobot function is called per each following point of the whole trajectory
-  // WHY TO NOT GIVE TO MOVEIT CLIENT THE ENTIRE TRAJECTORY the corresponding of python 'execute'  TO VISUALIZE RVIZ ALL MID POINTS OK
+  // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
   {
     trajectory_pose.position = traj_pt.positions;
     // trajectory_pose.velocity = traj_pt.velocities;
     moveRobot(trajectory_pose);
-    ros::Duration(robot_trajectory.joint_trajectory.points[1].time_from_start).sleep(); // IL SAMLLE DURATION OK
+    ros::Duration(robot_trajectory.joint_trajectory.points[1].time_from_start).sleep(); 
+    // The above ros duration commands says that the sampling time a new trajpoint is given to the publisher 
+    // depends on the uniform sample duration made by the plugin
   }
 }
 
-// Spin ROS -> SHOULDN'T WE INSERT A LOOP RATE HERE TO CXALL THEN THE SPIN RATE LOOP OK
-void DynamicPlanner::spinner() { ros::spinOnce(); }
+// Spin ROS (the loop rate is set in the proper node)
+void DynamicPlanner::spinner() 
+{ 
+  ros::spinOnce(); 
+  checkTrajectory();
+}
 
-// Check if group1, group2 and gripperJoints are received from the planner
-// so the dynamic planner can start working
+// Check if the planner has received group definition, so the dynamic planner can start working
 bool DynamicPlanner::isReady() const
 {
   // The following booleans are true when the three subs have read something from active pubs 
-  return joints_group1_received_ && joints_group2_received_ && joints_gripper_received_;
+  return joints_group_received_;
 }
 
 //---------- PRIVATE FUNCTIONS -----------------------------------------------//
@@ -828,13 +624,12 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
 {
   // Setup publishers (for output trajectory) ...
   joints_pub_     = nh_.advertise<sensor_msgs::JointState>(
-                    "/move_group/fake_controller_joint_states", 1000);  
-  trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("/trajectory", 1000);
+                    "/move_group/fake_controller_joint_states", 1);  
+  trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("/trajectory", 1);
   stop_pub_       = nh_.advertise<std_msgs::Bool>("/stop_trajectory", 1);
   // ...and subscribers (for robot status update)
-  joints_sub_     = nh_.subscribe("/joint_states", 50, &DynamicPlanner::jointsCallback, this);
-  trajpoint_sub_ =  nh_.subscribe("/trajectory_counter", 2, &DynamicPlanner::trajPointCallback, this);
-  // WHY QUEUES SIZE IS NOT 1 YEAH PUT AT 1 OK
+  joints_sub_     = nh_.subscribe("/joint_states", 1, &DynamicPlanner::jointsCallback, this);
+  trajpoint_sub_ =  nh_.subscribe("/trajectory_counter", 1, &DynamicPlanner::trajPointCallback, this);
 
   // Setup planning scene and robot model
   robot_model_loader_ = robot_model_loader::RobotModelLoader("/robot_description");
@@ -844,7 +639,7 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
   planning_pipeline_  = planning_pipeline::PlanningPipelinePtr(new planning_pipeline::PlanningPipeline(
                         robot_model_, nh_, "planning_plugin", "request_adapters"));
   planning_pipeline_->checkSolutionPaths(false);
-  request_.goal_constraints.resize(1);            // set the number of goal constraint as default 1
+  request_.goal_constraints.resize(1);
 
   // Update planner parameters; velocity and acceleration
   params_.vel_factor = v_factor;
@@ -871,72 +666,70 @@ moveit::core::VariableBounds Struct Reference
     bool 	  acceleration_bounded_
 */
 
-// TODO: check why this doesn't work -> DOES IT STILL DOESN'T WORK IT MAY WORK BUT DYNAMIC ADAPATION OF JOINTS LIMIT TO PERFORM WELL OKKK
-// Joints position limits adapter
-void DynamicPlanner::adaptJointsLimits()
+// Joints position limits adapter -> TODO: check if it works with a cout
+void DynamicPlanner::adaptJointsLimits() 
 {
   // Clear previous mapping
   original_joints_limits_map_.clear();
 
   // Get the list of the current joint model group actived within the planner
-  auto ja = joint_model_group1_->getActiveJointModels();  // vector of Joint Models
+  auto ja = joint_model_group1_->getActiveJointModels();
 
   // Iterate over the active joints
   for (uint i = 0; i < ja.size(); i++)
   {
     // Read joint names
     auto robot_joints_names = ja[i]->getVariableNames();    
-    // WHY A JOINT SHOULD HAVE MORE THAN 1 VARIABLE OK TRY A COUT TO SEE
     
-    // Iterate over active joints limits
+    // Iterate over active joints names variabls
     for (uint j = 0; j < robot_joints_names.size(); j++)
       
       // Iterate over active joints start position
       for (uint k = 0; k < request_.start_state.joint_state.name.size(); k++)
       {
         // Check if names in the motion planning request correspond to active model loaded
-        if (request_.start_state.joint_state.name[k] != robot_joints_names[j])
-          continue;
-
-        // Iterate over active joints costraints
-        for (uint w = 0; w < request_.goal_constraints[0].joint_constraints.size(); w++)
+        if (request_.start_state.joint_state.name[k] == robot_joints_names[j])
         {
-          // If the considered name is within the joint costraints
-          if (request_.goal_constraints[0].joint_constraints[w].joint_name != robot_joints_names[j])
-            continue;
+          // Iterate over active joints costraints
+          for (uint w = 0; w < request_.goal_constraints[0].joint_constraints.size(); w++)
+          {
+            // If the considered name is within the joint costraints (sequence of names can be different)
+            if (request_.goal_constraints[0].joint_constraints[w].joint_name == robot_joints_names[j])
+            {
+              // Get currently setup joint limits
+              moveit::core::VariableBounds limit = ja[i]->getVariableBounds(robot_joints_names[j]);
 
-          // Get currently setup joint limits
-          moveit::core::VariableBounds limit = ja[i]->getVariableBounds(robot_joints_names[j]);
+              // Compute new desired limit positions among two possibilities:
+              // 1: joint current position
+              // 2: position defined within the goal constraint
+              double max_position = std::max(request_.start_state.joint_state.position[k],
+                                    request_.goal_constraints[0].joint_constraints[w].position);
+              double min_position = std::min(request_.start_state.joint_state.position[k],
+                                    request_.goal_constraints[0].joint_constraints[w].position);
 
-          // Compute new desired limit positions among two possibilities:
-          // 1: joint current position
-          // 2: position defined within the goal constraint
-          double max_position = std::max(request_.start_state.joint_state.position[k],
-                                request_.goal_constraints[0].joint_constraints[w].position);
-          double min_position = std::min(request_.start_state.joint_state.position[k],
-                                request_.goal_constraints[0].joint_constraints[w].position);
+              // If currently set positions are smaller/bigger than above computation, change it
+              if (limit.max_position_ < max_position)
+                limit.max_position_ = max_position + 0.03;
+              else if (limit.min_position_ > min_position)
+                limit.min_position_ = min_position - 0.03;
+              else
+                break;
 
-          // If currently set positions are smaller/bigger than above computation, change it
-          if (limit.max_position_ < max_position)
-            limit.max_position_ = max_position + 0.03;
-          else if (limit.min_position_ > min_position)
-            limit.min_position_ = min_position - 0.03;
-          else
-            break;
-
-          // Store original joint limits
-          original_joints_limits_map_[robot_joints_names[j]] = ja[i]->getVariableBounds(robot_joints_names[j]);
-          
-          // Temporarly update joint limits
-          robot_model_->getJointModel(robot_joints_names[j])->setVariableBounds(robot_joints_names[j], limit);
-          
-          // Log the results to the console
-          ROS_WARN("Adapted joints limits to include start/stop positions:");
-          ROS_WARN("- %s : [%.4f, %.4f] --> [%.4f, %.4f]", robot_joints_names[j].c_str(),
-                   original_joints_limits_map_[robot_joints_names[j]].min_position_,
-                   original_joints_limits_map_[robot_joints_names[j]].max_position_,
-                   limit.min_position_, limit.max_position_);
-          break;
+              // Store original joint limits
+              original_joints_limits_map_[robot_joints_names[j]] = ja[i]->getVariableBounds(robot_joints_names[j]);
+              
+              // Temporarly update joint limits
+              robot_model_->getJointModel(robot_joints_names[j])->setVariableBounds(robot_joints_names[j], limit);
+              
+              // Log the results to the console
+              ROS_WARN("Adapted joints limits to include start/stop positions:");
+              ROS_WARN("- %s : [%.4f, %.4f] --> [%.4f, %.4f]", robot_joints_names[j].c_str(),
+                      original_joints_limits_map_[robot_joints_names[j]].min_position_,
+                      original_joints_limits_map_[robot_joints_names[j]].max_position_,
+                      limit.min_position_, limit.max_position_);
+              break;
+            }
+          }
         }
       }
   }
@@ -988,112 +781,75 @@ moveit_msgs::RobotTrajectory  robot_trajectory
       duration  time_from_start
 */
 
-// Merging robot trajectory
+// Merging a given robot trajectory with the preempted trajectory_
 void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
 {
-
   /* 
     robot_trajectory (rt): input to the function, it's the trajectory we want to merge
     trajectory_ (t):       global class variable, it's the trajectory running now
 
-    if size(rt) < size(t) 
+    if size(rt) < size(t)       # PUSH_FRONT
       t = [rt,t]
-    else
-      rt = [rt,t], t=rt da provare se c++ lo prende OK
+    else                        # PUSH_BACK
+      rt = [rt,t], t=rt 
+    # TODO: to test if c++ coding accepts this implementation as buffer
 
-    THE ACTUAL QUESTION IS ... WHY -> PUT ALWAYS THE NEW BEFORE  THE TRAJ YOU ALEADY HAVE 
+    The switching in size depends on the length to help fasten the code
   */
 
   // If the trajectory input is SMALLER than the running one
   if (robot_trajectory.joint_trajectory.points.size() < trajectory_.joint_trajectory.points.size())
-    
+  {
     // Iterate along all the points of the input trajectory
     for (uint k = 0; k < robot_trajectory.joint_trajectory.points.size(); ++k)
-      // The new trajectory fills the global one from the end to its maximum possible
+    {
+      // The new trajectory fills the global one by putting the last element into the first index ITERATIVELY (pushes the former ones back)
       trajectory_.joint_trajectory.points.insert(
-        trajectory_.joint_trajectory.points.begin(),  // index of the insert position
+        trajectory_.joint_trajectory.points.begin(),                    // index of the insert position
         robot_trajectory.joint_trajectory.points[
-          robot_trajectory.joint_trajectory.points.size() - (1 + k)]); // element to add
+          robot_trajectory.joint_trajectory.points.size() - (1 + k)]);  // element to add
 
-    // I would substitute the code of the above FOR loop with the following two lines
-    // jt = robot_trajectory.joint_trajectory.points
-    // t  = trajectory_.joint_trajectory.points
-    // std::reverse(std::begin(jt),std::end(jt))
-    // t = [jt,t]
+      // I would substitute the code of the above FOR loop with the following two lines
+      // Rt = robot_trajectory.joint_trajectory.points
+      // t  = trajectory_.joint_trajectory.points
+      // t = [Rt,t]
+
+      // trajectory_.joint_trajectory.points = robot_trajectory.joint_trajectory.points.push_back(trajectory_.joint_trajectory.points)
+      // or
+      // trajectory_.joint_trajectory.points = [robot_trajectory.joint_trajectory.points,trajectory_.joint_trajectory.points] -> I BET ON THIS
+    }
+  }
   
-  // If the trajectory input is BIGGER than the running one
+  // If the trajectory input is BIGGER (or equal) than the running one (it never happens in this library)
   else
   {
     // Iterate along all the points of the global class trajectory
     for (const auto& traj_pt : trajectory_.joint_trajectory.points)
+    {
       robot_trajectory.joint_trajectory.points.push_back(traj_pt);
+    }
     trajectory_ = robot_trajectory;
 
-    // I would substitute the above for loop with the following line
+    // TODO: I would substitute the above for loop with the following line
     // t = [rt,t]
   }  
 
-  trajectory_pub_.publish(trajectory_.joint_trajectory);  //publish trajectory
+  // TODO: try this one an comment all above code
+  // trajectory_.joint_trajectory.points = [robot_trajectory.joint_trajectory.points,trajectory_.joint_trajectory.points]
+
+  // Publish trajectory
+  trajectory_pub_.publish(trajectory_.joint_trajectory);
 
   // Update trajectory visualization
   ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
             planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
   visual_tools_->deleteAllMarkers();
-  if (planning_group_ == planning_group_name1_)
+  if (planning_group_ == planning_group_name_)
     visual_tools_->publishTrajectoryLine(
       trajectory_,
-      joint_model_group1_->getLinkModel(joint_model_group1_->getLinkModelNames().back()),
-      joint_model_group1_);
-  else
-    visual_tools_->publishTrajectoryLine(
-      trajectory_, 
-      joint_model_group2_->getLinkModel("arm2_wrist_3_link"),
-      joint_model_group2_);
+      joint_model_group_->getLinkModel(joint_model_group_->getLinkModelNames().back()),
+      joint_model_group_);
   visual_tools_->trigger();
-}
-
-// Check if the angle of the ee link fram exceeds the min_elevation_angle_ -> TO TAKE THE REEL FROM INSIDE POKKKK
-// QUESTION: SHOULD WE CHANGE THE NAME OF THE "Eigen::Isometry3d" 'tf' 
-// so it's not misunderstood with the tf library OKKK
-bool DynamicPlanner::checkElevationAngle(const robot_state::RobotStatePtr rs)
-{
-  // Get ee angle from the current robot state
-  Eigen::Isometry3d tf = rs->getFrameTransform(ee_link_name_);
-
-  // tf.matrix() extracts the 4x4 transformation matrix, so element (2,2)
-  // is the rotation angle around y axis
-
-  // Check execution: if out of the boundary, return false, else true
-  if (tf.matrix()(2, 2) < std::sin(min_elevation_angle_))
-  {
-    ROS_DEBUG_STREAM("Elevation angle exceeds limits: "
-                     << tf.matrix()(2, 2) << " < " << std::sin(min_elevation_angle_));
-    return false;
-  }
-
-  return true;
-}
-
-// MY PERSONAL OPINION: robot_state_ SHOULD NOT BE USED IN THE FOLLOWING FUNCTION
-// BUT IT SHOULD BE SUBSTITUTED BY A LOCAL VARIABLE OF THE SAME TYPE OR IT MAY
-// HOLD THE VALUE OF THE LAST POSITION OF THE TRAJECTORY, however it should always 
-// contain the current value of robot state (containing current positions and velocities)
-
-// Check if each point of a given trajectory passes checkElevationAngle()
-bool DynamicPlanner::checkTrajectoryElevation(const moveit_msgs::RobotTrajectory& robot_trajectory)
-{
-  // Iterate over each point of the trajectory
-  for (uint i = 0; i < robot_trajectory.joint_trajectory.points.size(); ++i)
-  {
-    // Set iterated point of the trajectory within the robot state
-    robot_state_->setJointGroupPositions(
-      planning_group_, robot_trajectory.joint_trajectory.points[i].positions);
-
-    // Check if updated robot state passes the check
-    if (!checkElevationAngle(robot_state_))
-      return false;
-  }
-  return true;
 }
 
 void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bool send)
