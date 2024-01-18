@@ -44,6 +44,7 @@
 
 //C++ Libraries  
 #include <unordered_map> // https://en.cppreference.com/w/cpp/container/unordered_map
+#include <cmath> 
 
 // ROS Libaries
 #include <control_msgs/JointTrajectoryControllerState.h>
@@ -140,7 +141,7 @@ public:
       void setParams(const DynamicPlannerParams& params);
 
       // Set joints limits as vectors of min-max angles
-      void setJointsLimits(const std::vector<std::string>&  joints_names,
+      void setJointsLimits(const std::vector<std::string>& joints_names,
                           const std::vector<double>&       max_angles,
                           const std::vector<double>&       min_angles);
 
