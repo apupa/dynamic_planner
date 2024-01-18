@@ -42,9 +42,8 @@
 
 // ------------------ CLASS CONSTRUCTOR-------------------- //
 
-// V1: 5 args, 8 private variables initializers -> ONLY 1 PLANNING GROUP
-DynamicPlanner::DynamicPlanner(
-                               const std::string& manipulator_name,           
+// V1: 5 args, 8 private variables initializers
+DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
                                const std::vector<std::string>& joints_name,
                                const double v_factor, const double a_factor,
                                const bool dynamic_behaviour)
@@ -82,9 +81,8 @@ DynamicPlanner::DynamicPlanner(
 
 //--------------------- PUBLIC FUNCTIONS -------------------------------------//
 
-//--------------------- VISUALIZATION FUNCTIONS ------------------------------//
-
 //--------------------- GETTER FUNCTIONS -------------------------------------//
+
 std::vector<moveit_msgs::CollisionObject>& DynamicPlanner::getCollisionObjects()
 {
   return collision_objects_;
@@ -532,7 +530,7 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
   for (const auto& target_pose : target_poses)
   {
     // Add the invertred joint position
-    joint_positions.push_back(invKine(target_pose,ee_link_name_));
+    joint_positions.push_back(invKine(target_pose,ee_link_name_));  // TODO: check if the solution of InvKine doesn't hide multiple solutions
   }
 
   // Pass inverted positions to the V5 planner
@@ -688,8 +686,7 @@ void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
   joints_pub_.publish(joint_states);
 }
 
-/*
-  moveit_msgs/RobotTrajectory/JointTrajectory/JointTrajectoryPoint[].msg :
+/* moveit_msgs/RobotTrajectory/JointTrajectory/JointTrajectoryPoint[].msg :
       float64[] positions
       float64[] velocities
       float64[] accelerations

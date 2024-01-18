@@ -109,7 +109,7 @@ public:
                   const std::vector<std::string>& joints_name, 
                   const double v_factor = 0.2,
                   const double a_factor = 0.2,
-                  const bool dynamic_behaviour = true);
+                  const bool dynamic_behaviour = false);
 
   // --------------------- PUBLIC FUNCTIONS ---------------------
 
@@ -127,7 +127,7 @@ public:
 
     // Perform inverse or forward kinematics
       const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose,
-                                                        const std::string& link_name);
+                                                       const std::string& link_name);
       const geometry_msgs::PoseStamped setFKine(std::vector<double> joint_values);
       const Eigen::MatrixXd getJacobian();
 
@@ -159,26 +159,28 @@ public:
       // Single JOINT goal
       void plan(const std::vector<double>& final_position);
       void plan(const std::vector<double>& final_position,
-                const std::string& joint_model_group_name);
-      void plan(const std::vector<double>& final_position,
-                const std::string& joint_model_group_name,
+                const std::string&         joint_model_group_name);
+      void plan(const std::vector<double>&     final_position,
+                const std::string&             joint_model_group_name,
                 const robot_state::RobotState& robot_state);
-      // Multiple JOITNS goals
+      // Multiple JOINTS goals
       void plan(const std::vector<std::vector<double>>& positions);
       void plan(const std::vector<std::vector<double>>& positions,
-                const std::string& joint_model_group_name,
-                bool online_replanning);
+                const std::string&                      joint_model_group_name,
+                bool                                    online_replanning);
       // Single POSITION goal (within 3D carthesian space, operative space)
-      void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name);
-      void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name,
-                const std::string& joint_model_group_name);
+      void plan(const geometry_msgs::PoseStamped& final_pose, 
+                const std::string&                link_name);
+      void plan(const geometry_msgs::PoseStamped& final_pose, 
+                const std::string&                link_name,
+                const std::string&                joint_model_group_name);
       void plan(const geometry_msgs::PoseStamped& final_pose,
-                const std::string& link_name,
-                const std::string& joint_model_group_name,
-                const robot_state::RobotState& robot_state);
+                const std::string&                link_name,
+                const std::string&                joint_model_group_name,
+                const robot_state::RobotState&    robot_state);
       // Multiple POSITIONS goals (within 3D carthesian space, operative space)
       void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
-                const std::string& link_name);                
+                const std::string&                             link_name);                
 
       // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
       void checkTrajectory();
@@ -193,9 +195,7 @@ public:
       void spinner(void);
 
       // Check if dynamic planner is ready to work
-      bool isReady() const;
-
-  
+      bool isReady() const;  
   
 private:
 
