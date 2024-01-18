@@ -108,7 +108,8 @@ public:
     DynamicPlanner(const std::string& manipulator_name,
                   const std::vector<std::string>& joints_name, 
                   const double v_factor = 0.2,
-                  const double a_factor = 0.2);
+                  const double a_factor = 0.2,
+                  const bool dynamic_behaviour = true);
 
   // --------------------- PUBLIC FUNCTIONS ---------------------
 
@@ -120,15 +121,15 @@ public:
       const moveit_visual_tools::MoveItVisualToolsPtr getVisualToolsPtr();
 
     // Get current trajectory state
-      const moveit_msgs::RobotTrajectory DynamicPlanner::getTrajectory();
-      const ulong DynamicPlanner::getTrajpoint();
-      const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq();
+      const moveit_msgs::RobotTrajectory getTrajectory();
+      const ulong getTrajpoint();
+      const std::vector<moveit_msgs::Constraints> getGoalsSeq();
 
     // Perform inverse or forward kinematics
-      const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
+      const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose,
                                                         const std::string& link_name);
-      const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> joint_values);
-      const Eigen::MatrixXd DynamicPlanner::getJacobian();
+      const geometry_msgs::PoseStamped setFKine(std::vector<double> joint_values);
+      const Eigen::MatrixXd getJacobian();
 
     // Dynamic planner parameters getter and setter
       DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
@@ -165,14 +166,19 @@ public:
       // Multiple JOITNS goals
       void plan(const std::vector<std::vector<double>>& positions);
       void plan(const std::vector<std::vector<double>>& positions,
+                const std::string& joint_model_group_name,
                 bool online_replanning);
       // Single POSITION goal (within 3D carthesian space, operative space)
       void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name);
       void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name,
                 const std::string& joint_model_group_name);
-      void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name,
+      void plan(const geometry_msgs::PoseStamped& final_pose,
+                const std::string& link_name,
                 const std::string& joint_model_group_name,
                 const robot_state::RobotState& robot_state);
+      // Multiple POSITIONS goals (within 3D carthesian space, operative space)
+      void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
+                const std::string& link_name);                
 
       // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
       void checkTrajectory();
@@ -212,16 +218,11 @@ private:
 
     // Dynamic planner params definition
       DynamicPlannerParams params_;
-
       std::string planning_group_name_;                           // Planning group
-
       std::vector<std::string> joints_names_group_;               // Joints group names
-
-      std::vector<double> joints_values_group_;                   // Joints values
-      
+      std::vector<double> joints_values_group_;                   // Joints values      
       std::unordered_map<std::string, double> joints_map_group_;  // Set group joints names and values through mapping
-
-      bool dynamic_behaviour_;                                     // Set automatic check trajectory within the ROS spinner
+      bool dynamic_behaviour_;                                    // Set automatic check trajectory within the ROS spinner
 
       // Set joints limit through mapping the name of the configuration with a user defined 
       // list of min-max values on pos-vel-acc
@@ -235,7 +236,7 @@ private:
       robot_model_loader::RobotModelLoader  robot_model_loader_;
       robot_model::RobotModelPtr            robot_model_ = nullptr;
       robot_state::RobotStatePtr            robot_state_ = nullptr;
-      // Joint and grupper model groups
+      // Joint model groups
       const robot_model::JointModelGroup*   joint_model_group_;
 
     // PLANNING SCENE SETUP
@@ -288,6 +289,9 @@ private:
     // MoveIt! planning to many goals through trajctory
     void plan(const std::vector<moveit_msgs::Constraints>& desired_goals,
               moveit_msgs::RobotTrajectory& robot_trajectory);
+
+    // Visualization function
+    void trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory);
 
     // CALLBACK FUNCTIONS FOR SUBSCRIBERS
     // Trajectory points current state 

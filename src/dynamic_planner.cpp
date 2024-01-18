@@ -126,25 +126,24 @@ const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
 }
 
 const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
-                                  const std::string& link_name)
+                                                  const std::string& link_name)
 {
-  // Create a copy of the current joint_model_group_
-  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
-
   // Create a copy of the kinematic state of robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  std::vector<double> joint_values;
+
+  // Create a copy of the current joint_model_group_
+  const robot_state::JointModelGroup* joint_model_group = robot_model_->getJointModelGroup(planning_group_name_);
 
   // Perform inverse kinematics to find joint positions
-  bool ik_success = robot_state->setFromIK(
+  bool ik_success = kinematic_state->setFromIK(
     joint_model_group,    // group of joints to set
     target_pose.pose,     // the pose the last link in the chain needs to achieve
-    10,                   // attempts, default: 1
     0.1);                 // timeout,  default: 0.0 (no timeout)
   
   if (ik_success)
   {
     // Get joint values after successful IK
-    std::vector<double> joint_values;
     kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
 
     // Print joint values
@@ -160,7 +159,7 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamp
 const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> joint_values)
 {
   // Create a copy of the current joint_model_group_
-  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+  const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
 
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
@@ -168,20 +167,24 @@ const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> jo
 
   // Compute the forward kinematics
   const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name_);
+  Eigen::Vector3d translation_vector = end_effector_state.translation();
+  Eigen::Vector3d rotation_angles = end_effector_state.rotation().eulerAngles(1, 2, 0);
 
   // Print end-effector pose. Remember that this is in the model frame
-  ROS_INFO_STREAM("Translation: \n" << end_effector_state.translation() << "\n");
-  ROS_INFO_STREAM("Rotation: \n" << end_effector_state.rotation() << "\n");
+  ROS_INFO_STREAM("Translation: \n" << translation_vector << "\n");
+  ROS_INFO_STREAM("Rotation: \n"    << rotation_angles << "\n");
 
   // Create the quaternion
   tf2::Quaternion quaternion;
-  quaternion.setRPY(end_effector_state.rotation().x, end_effector_state.rotation().y, end_effector_state.rotation().z);
+  quaternion.setRPY(rotation_angles[0], rotation_angles[1], rotation_angles[2]);
 
   // Fill the pose msg
   geometry_msgs::PoseStamped end_effector_pose;
-  end_effector_pose.header.stamp = ros::Time.now();
-  end_effector_pose.header.frame_id = base_name_;
-  end_effector_pose.pose.position     = end_effector_state.translation();
+  end_effector_pose.header.stamp      = ros::Time::now();
+  end_effector_pose.header.frame_id   = "base_link";
+  end_effector_pose.pose.position.x   = translation_vector[0];
+  end_effector_pose.pose.position.y   = translation_vector[1];
+  end_effector_pose.pose.position.z   = translation_vector[2];
   end_effector_pose.pose.orientation  = tf2::toMsg(quaternion);
 
   // return value
@@ -192,7 +195,7 @@ const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> jo
 const Eigen::MatrixXd DynamicPlanner::getJacobian ()
 {
     // Create a copy of the current joint_model_group_
-  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+  const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
 
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
@@ -343,7 +346,7 @@ moveit_msgs/RobotState Message
 void DynamicPlanner::plan(const std::vector<double>& final_position)
 {
   // Planner V2 is called here
-  plan(final_position, planning_group_name1_);  // string of joint_model_group_name
+  plan(final_position, planning_group_name_);  // string of joint_model_group_name
 }
 
 // Planner V2 -> input: as V1 + joint planning group name
@@ -354,7 +357,7 @@ void DynamicPlanner::plan(const std::vector<double>& final_position,
   *robot_state_ = planning_scene_->getCurrentState();
 
   // Call planner V3
-  plan(final_position,joint_model_group_name,robot_state_);
+  plan(final_position,joint_model_group_name,*robot_state_);
 }
 
 // Planner V3 -> input: as V2 + given robot state
@@ -403,25 +406,27 @@ void DynamicPlanner::plan(const std::vector<double>& final_position,
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
 {
   // Planner V5 is called here
-  plan(positions, planning_group_name_);
+  plan(positions, planning_group_name_,false);    // TODO: change true if merging function works
 }
 
+// TODO: verify if it actually works
 // Planner V5 -> input: as V4 + joint planning group name
 //            -> output: a plan(goal, trajectory), it's the only one with this output
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
+                          const std::string& joint_model_group_name,
                           bool online_replanning)
 {
   // Get the last position as final joint goal
   final_position_ = positions.back();
   planning_space_ = JOINTS_SPACE;
-  planning_group_ = joint_model_group_;
+  planning_group_ = joint_model_group_name;
 
   // Update initial robot state for planning request (both useful if the robot is standing or if it is moving)
   *robot_state_ = planning_scene_->getCurrentState();
   robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
 
   // Planning request update
-  request_.group_name                      = joint_model_group_;
+  request_.group_name                      = joint_model_group_name;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
   request_.num_planning_attempts           = params_.num_attempts;
@@ -430,19 +435,19 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   request_.path_constraints                = params_.path_constraints;
 
   // If new goals should not be added to previous ones, clear goals sequence and old trajectory
-  if (!online_replanning) {goals_seq.clear(); trajectory_.joint_trajectory.points.clear()}
+  if (!online_replanning) {goals_seq.clear(); trajectory_.joint_trajectory.points.clear();}
 
   // For each goal of the array 'positions' given by the user
   for (const auto& position : positions)
   {
     // Get the robot state associated to the position of the current iteration
-    robot_state::RobotState& pos_robot_state;
-    pos_robot_state->setJointGroupPositions(joint_model_group_, pos_robot_state);
+    robot_state::RobotStatePtr pos_robot_state;
+    pos_robot_state->setJointGroupPositions(joint_model_group_name, position);
 
     // Add a kinematic constraint with HIGHER TOLERANCE than Planner V3
     goals_seq.push_back(kinematic_constraints::constructGoalConstraints(
       *pos_robot_state,   // robot state associated to the currently iterated position
-      robot_model_->getJointModelGroup(joint_model_group_), 
+      robot_model_->getJointModelGroup(joint_model_group_name), 
       0.01,               // below radians absolute tolerance
       0.01));             // upper radians absolute tolerance
   }
@@ -469,7 +474,7 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
   *robot_state_ = planning_scene_->getCurrentState();
   
   // Call planner V8
-  plan(final_pose,link_name,joint_model_group_name,robot_state);
+  plan(final_pose,link_name,joint_model_group_name,*robot_state_);
 
 }
 
@@ -527,11 +532,11 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
   for (const auto& target_pose : target_poses)
   {
     // Add the invertred joint position
-    joint_positions.push_back(invKine(target_pose));
+    joint_positions.push_back(invKine(target_pose,ee_link_name_));
   }
 
   // Pass inverted positions to the V5 planner
-  plan(joint_positions,false); // TODO: replace with true when we are sure of the replanning mode
+  plan(joint_positions, planning_group_name_, false); // TODO: replace with true when we are sure of the replanning mode
 }
 
 // Check trajectory function: individuate an invalide state and correct trajectory online
@@ -783,7 +788,7 @@ void DynamicPlanner::adaptJointsLimits()
   original_joints_limits_map_.clear();
 
   // Get the list of the current joint model group actived within the planner
-  auto ja = joint_model_group1_->getActiveJointModels();
+  auto ja = joint_model_group_->getActiveJointModels();
 
   // Iterate over the active joints
   for (uint i = 0; i < ja.size(); i++)
@@ -951,7 +956,7 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
   trajectory_pub_.publish(trajectory_.joint_trajectory);
 
   // Update trajectory visualization
-  trajectoryVisualizer(trajectory_)
+  trajectoryVisualizer(trajectory_);
 }
 
 // Basic private planning function
@@ -994,7 +999,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
       result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
 
       // Update trajectory visualization
-      trajectoryVisualizer(trajectory_)
+      trajectoryVisualizer(trajectory_);
 
       // If the user (input of the function) want to make the robot move (not just display)
       if (send)
@@ -1042,7 +1047,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
 }
 
 // Visualize on RViz a given trajectory
-void trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory)
+void DynamicPlanner::trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory)
 {
     ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
                 planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
@@ -1083,7 +1088,7 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
       // Increment the number of joints recevied from the joints state subscriber
       counter_group++;
       // If we have reached the last joint of the group
-      if (counter_group1 == joints_names_group_.size())
+      if (counter_group == joints_names_group_.size())
       {
         // Iterate over the joints
         for (uint k = 0; k < joints_names_group_.size(); k++)
