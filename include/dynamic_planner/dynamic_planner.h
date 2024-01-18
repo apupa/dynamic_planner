@@ -53,6 +53,7 @@
 #include <std_msgs/Float64MultiArray.h>
 #include <std_msgs/Int32.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 // MoveIt! Libaries
 #include <moveit/collision_detection/collision_tools.h>
@@ -121,10 +122,13 @@ public:
     // Get current trajectory state
       const moveit_msgs::RobotTrajectory DynamicPlanner::getTrajectory();
       const ulong DynamicPlanner::getTrajpoint();
+      const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq();
 
-    // Perform inverse kinematics
-      const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
-                                     const std::string& link_name);
+    // Perform inverse or forward kinematics
+      const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
+                                                        const std::string& link_name);
+      const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> joint_values);
+      const Eigen::MatrixXd DynamicPlanner::getJacobian();
 
     // Dynamic planner parameters getter and setter
       DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
@@ -161,7 +165,7 @@ public:
       // Multiple JOITNS goals
       void plan(const std::vector<std::vector<double>>& positions);
       void plan(const std::vector<std::vector<double>>& positions,
-                const std::string& joint_model_group_name);
+                bool online_replanning);
       // Single POSITION goal (within 3D carthesian space, operative space)
       void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name);
       void plan(const geometry_msgs::PoseStamped& final_pose, const std::string& link_name,
@@ -255,11 +259,12 @@ private:
       std::string ee_link_name_;        // Gripper link name
 
       // Planning outputs
-      moveit_msgs::Constraints      goal_;            // Moevit msgs about goal constraints 
-      std::vector<double>           final_position_;  // Final joints position
-      geometry_msgs::PoseStamped    final_pose_;      // Final TCP 3D position
-      moveit_msgs::RobotTrajectory  trajectory_;      // Moevit msgs about trajectory
-      ulong trajpoint_;                               // Current point of the trajectory considered
+      moveit_msgs::Constraints      goal_;              // Moevit msgs about goal constraints 
+      std::vector<double>           final_position_;    // Final joints position
+      geometry_msgs::PoseStamped    final_pose_;        // Final TCP 3D position
+      moveit_msgs::RobotTrajectory  trajectory_;        // Moevit msgs about trajectory
+      ulong trajpoint_;                                 // Current point of the trajectory considered
+      std::vector<moveit_msgs::Constraints> goals_seq;  // Goals sequence given to the planner
 
       ulong invalid_state_;           // point of the trajectory where a collision has been found
       bool success_;                  // whereas trajectory planning has been successfull
@@ -277,11 +282,6 @@ private:
 
     // Merge a user defined trajectory with the running one depending on their relative length
     void merge(moveit_msgs::RobotTrajectory& robot_trajectory);
-
-    // Check if the y-axis rotation of the ee link overcomes an user defined value
-    bool checkElevationAngle(const robot_state::RobotStatePtr rs);
-
-    bool checkTrajectoryElevation(const moveit_msgs::RobotTrajectory& robot_trajectory);
 
     // MoveIt! planning to goal
     void plan(const moveit_msgs::Constraints& desired_goal, const bool send = true);

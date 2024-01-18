@@ -75,16 +75,14 @@ DynamicPlanner::DynamicPlanner(
 
   // Move virtual robot to the initial position
   sensor_msgs::JointState initial_pose_msg;
-  initial_pose_msg.name     = joints_names_group1_;
-  initial_pose_msg.position = joints_values_group1_;
+  initial_pose_msg.name     = joints_names_group_;
+  initial_pose_msg.position = joints_values_group_;
   moveRobot(initial_pose_msg);
 }
 
 //--------------------- PUBLIC FUNCTIONS -------------------------------------//
 
 //--------------------- VISUALIZATION FUNCTIONS ------------------------------//
-
-// 1)ce.visual_tools_->prompt( TODO
 
 //--------------------- GETTER FUNCTIONS -------------------------------------//
 std::vector<moveit_msgs::CollisionObject>& DynamicPlanner::getCollisionObjects()
@@ -122,12 +120,23 @@ const ulong DynamicPlanner::getTrajpoint()
   return trajpoint_;
 }
 
-const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
+const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
+{
+  return goals_seq;
+}
+
+const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
                                   const std::string& link_name)
 {
+  // Create a copy of the current joint_model_group_
+  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+
+  // Create a copy of the kinematic state of robot model
+  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+
   // Perform inverse kinematics to find joint positions
   bool ik_success = robot_state->setFromIK(
-    joint_model_group_,   // group of joints
+    joint_model_group,    // group of joints to set
     target_pose.pose,     // the pose the last link in the chain needs to achieve
     10,                   // attempts, default: 1
     0.1);                 // timeout,  default: 0.0 (no timeout)
@@ -136,7 +145,7 @@ const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
   {
     // Get joint values after successful IK
     std::vector<double> joint_values;
-    robot_state->copyJointGroupPositions(joint_model_group, joint_values);
+    kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
 
     // Print joint values
     ROS_INFO("Joint Values: ");
@@ -146,6 +155,57 @@ const std::vector<double>invKine(const geometry_msgs::PoseStamped& target_pose,
     }
   }
   return joint_values;
+}
+
+const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> joint_values)
+{
+  // Create a copy of the current joint_model_group_
+  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+
+  // Create a copy of the kinematic state of the required robot model
+  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
+
+  // Compute the forward kinematics
+  const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name_);
+
+  // Print end-effector pose. Remember that this is in the model frame
+  ROS_INFO_STREAM("Translation: \n" << end_effector_state.translation() << "\n");
+  ROS_INFO_STREAM("Rotation: \n" << end_effector_state.rotation() << "\n");
+
+  // Create the quaternion
+  tf2::Quaternion quaternion;
+  quaternion.setRPY(end_effector_state.rotation().x, end_effector_state.rotation().y, end_effector_state.rotation().z);
+
+  // Fill the pose msg
+  geometry_msgs::PoseStamped end_effector_pose;
+  end_effector_pose.header.stamp = ros::Time.now();
+  end_effector_pose.header.frame_id = base_name_;
+  end_effector_pose.pose.position     = end_effector_state.translation();
+  end_effector_pose.pose.orientation  = tf2::toMsg(quaternion);
+
+  // return value
+  return end_effector_pose;
+}
+
+// Get the jacobian matrix of the manipulator
+const Eigen::MatrixXd DynamicPlanner::getJacobian ()
+{
+    // Create a copy of the current joint_model_group_
+  robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+
+  // Create a copy of the kinematic state of the required robot model
+  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+
+  // Compute the jacobian
+  Eigen::MatrixXd jacobian;
+  Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+  kinematic_state->getJacobian(joint_model_group,
+                               kinematic_state->getLinkModel(joint_model_group->getLinkModelNames().back()),
+                               reference_point_position, jacobian);
+  ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");
+
+  return jacobian;
 }
 
 //--------------------- SETTER FUNCTIONS -------------------------------------//
@@ -349,50 +409,46 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
 // Planner V5 -> input: as V4 + joint planning group name
 //            -> output: a plan(goal, trajectory), it's the only one with this output
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
-                          const std::string& joint_model_group_name)
+                          bool online_replanning)
 {
   // Get the last position as final joint goal
   final_position_ = positions.back();
   planning_space_ = JOINTS_SPACE;
-  planning_group_ = joint_model_group_name;
+  planning_group_ = joint_model_group_;
 
-  // Update initial robot state for planning request
-  // It's not possible to create a buffer of setpoint positions since robot initial planning state is resetted each time
-  // TODO: what if the user wants to give consecutive goals while the manipulator is moving?
+  // Update initial robot state for planning request (both useful if the robot is standing or if it is moving)
   *robot_state_ = planning_scene_->getCurrentState();
+  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
 
-  // Update planning request settings -> TODO: these should be removed because they are already in the private plan() function
-
-  // Set joint values for the joint model group (current values are taken from the joint state subscriber)
-  robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_); // -> USELESS? or is it a way to solve the previous TODO?
-  
-  // Robot state update is used to update the moveit request starting state for planning
-  request_.group_name                      = joint_model_group_name;
+  // Planning request update
+  request_.group_name                      = joint_model_group_;
   request_.planner_id                      = params_.name;
   request_.allowed_planning_time           = params_.planning_time;
   request_.num_planning_attempts           = params_.num_attempts;
   request_.max_velocity_scaling_factor     = params_.vel_factor;
   request_.max_acceleration_scaling_factor = params_.acc_factor;
   request_.path_constraints                = params_.path_constraints;
-  robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
 
-  // Create a vector of multiple constrained goals
-  std::vector<moveit_msgs::Constraints> goals;
+  // If new goals should not be added to previous ones, clear goals sequence and old trajectory
+  if (!online_replanning) {goals_seq.clear(); trajectory_.joint_trajectory.points.clear()}
+
   // For each goal of the array 'positions' given by the user
   for (const auto& position : positions)
   {
-    // Get robot the robot state associated to the position of the current iteration
-    robot_state_->setJointGroupPositions(joint_model_group_name, position);
+    // Get the robot state associated to the position of the current iteration
+    robot_state::RobotState& pos_robot_state;
+    pos_robot_state->setJointGroupPositions(joint_model_group_, pos_robot_state);
+
     // Add a kinematic constraint with HIGHER TOLERANCE than Planner V3
-    goals.push_back(kinematic_constraints::constructGoalConstraints(
-      *robot_state_, 
-      robot_model_->getJointModelGroup(joint_model_group_name), 
-      0.01,      // below radians absolute tolerance
-      0.01));    // upper radians absolute tolerance
+    goals_seq.push_back(kinematic_constraints::constructGoalConstraints(
+      *pos_robot_state,   // robot state associated to the currently iterated position
+      robot_model_->getJointModelGroup(joint_model_group_), 
+      0.01,               // below radians absolute tolerance
+      0.01));             // upper radians absolute tolerance
   }
 
   // Calling dynamic planner private function for multiple joint goals
-  plan(goals, trajectory_);
+  plan(goals_seq, trajectory_);
 
 }
 
@@ -459,8 +515,24 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
 
 }
 
-// THE LAST VERSION SHOULD MISS: THE CORRESPONDING PLANNER IN THE 3D SPACE OF THE V5
-// Easy to create by calling the V5 after inverse kynematics of all the 3D points
+// Planner V9 -> inputs: vectors of 3D carthesian poses + link_name (usually the end effector
+//            -> output: planner V5
+void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
+                          const std::string& link_name)
+{
+  // Vector of joints positions
+  std::vector<std::vector<double>> joint_positions;
+
+  // Iterate over each target pose
+  for (const auto& target_pose : target_poses)
+  {
+    // Add the invertred joint position
+    joint_positions.push_back(invKine(target_pose));
+  }
+
+  // Pass inverted positions to the V5 planner
+  plan(joint_positions,false); // TODO: replace with true when we are sure of the replanning mode
+}
 
 // Check trajectory function: individuate an invalide state and correct trajectory online
 void DynamicPlanner::checkTrajectory()
@@ -604,6 +676,7 @@ void DynamicPlanner::checkTrajectory()
       float64[] velocity
       float64[] effort
 */
+
 // Move Robot function! A JointState msg is published on the MoveIt! fake controller
 void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
 {
@@ -635,13 +708,14 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     moveRobot(trajectory_pose);
     ros::Duration(robot_trajectory.joint_trajectory.points[1].time_from_start).sleep(); 
     // The above ros duration commands says that the sampling time a new trajpoint is given to the publisher 
-    // depends on the uniform sample duration made by the plugin
+    // It depends on the uniform sample duration made by the plugin
   }
 }
 
 // Spin ROS (the loop rate is set in the proper node)
 void DynamicPlanner::spinner() 
 { 
+  ROS_INFO("I am spinning");  // TODO: Comment this line after debug phase TO SEE IF MOVEROBOT(trajectory) FUNCTION IS BLOCKING !!
   ros::spinOnce(); 
   checkTrajectory();
 }
@@ -947,9 +1021,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   }
 }
 
-// TODO: on my opinion, this function doesn't work neither if goals are given all at once
-// neither if they are given in a secondary moment
-// Robot planner with goals and a given trajectory
+// Robot planner with vectors of goals and a given trajectory
 void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_goals,
                           moveit_msgs::RobotTrajectory& robot_trajectory)
 {
@@ -965,16 +1037,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
 
     // If the planner has been successful, trajectory is merged
     merge(robot_trajectory);
-    robot_trajectory                         = trajectory_;
-    request_.planner_id                      = params_.name;
-    request_.allowed_planning_time           = params_.planning_time;
-    request_.num_planning_attempts           = params_.num_attempts;
-    request_.max_velocity_scaling_factor     = params_.vel_factor;
-    request_.max_acceleration_scaling_factor = params_.acc_factor;
-
-    // The state msg to pass to the planner is taken from start (?) robot state
-    // TODO: WHY THE FOLLOWING LINE IS REPEATED? robot state should be updated !!
-    robot_state::robotStateToRobotStateMsg(*robot_state_, request_.start_state);
+    robot_trajectory = trajectory_;
   }
 }
 
