@@ -42,9 +42,9 @@
 
 // IMPORT LIBRARIES
 
-//C++ Libraries  
+//C++ Libraries
+#include <cmath>
 #include <unordered_map> // https://en.cppreference.com/w/cpp/container/unordered_map
-#include <cmath> 
 
 // ROS Libaries
 #include <control_msgs/JointTrajectoryControllerState.h>

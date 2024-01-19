@@ -123,6 +123,7 @@ const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
   return goals_seq;
 }
 
+// TODO: verify if it works
 const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
                                                   const std::string& link_name)
 {
@@ -694,7 +695,8 @@ void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
       duration  time_from_start
 */
 
-// Move Robot function given a trajectory to compute
+// Move Robot function given a trajectory to compute -> THIS FUNCTION BLOCKS THE CODE RUNNING
+// THIS SHOULD BE PUT IN A DIFFERENT NODE:: TODO
 void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory)
 {
   // Create a JointState empty variable for the fake controller publisher
@@ -717,7 +719,6 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
 // Spin ROS (the loop rate is set in the proper node)
 void DynamicPlanner::spinner() 
 { 
-  ROS_INFO("I am spinning");  // TODO: Comment this line after debug phase TO SEE IF MOVEROBOT(trajectory) FUNCTION IS BLOCKING !!
   ros::spinOnce(); 
   checkTrajectory();
 }
