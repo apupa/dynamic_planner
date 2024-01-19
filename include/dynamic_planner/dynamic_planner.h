@@ -129,7 +129,7 @@ public:
     // Perform inverse or forward kinematics
       const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose,
                                                        const std::string& link_name);
-      const geometry_msgs::PoseStamped setFKine(std::vector<double> joint_values);
+      const geometry_msgs::PoseStamped setFKine(const sensor_msgs::JointState::ConstPtr& joint_states);
       const Eigen::MatrixXd getJacobian();
 
     // Dynamic planner parameters getter and setter

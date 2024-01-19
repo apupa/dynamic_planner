@@ -155,10 +155,16 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamp
   return joint_values;
 }
 
-const geometry_msgs::PoseStamped DynamicPlanner::setFKine(std::vector<double> joint_values)
+const geometry_msgs::PoseStamped DynamicPlanner::setFKine(const sensor_msgs::JointState::ConstPtr& joint_state)
 {
   // Create a copy of the current joint_model_group_
   const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+
+  sensor_msgs::JointState js = *joint_state;
+
+  // Store joint values into a vector
+  std::vector<double> joint_values =   {0.,0.,0.,0.,0.,0.};
+  for (unsigned int k = 0; k < 6; k++) {joint_values[k] = js.position[k];}
 
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
@@ -751,6 +757,7 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
   planning_scene_     = planning_scene::PlanningScenePtr(new planning_scene::PlanningScene(robot_model_));
   planning_pipeline_  = planning_pipeline::PlanningPipelinePtr(new planning_pipeline::PlanningPipeline(
                         robot_model_, nh_, "planning_plugin", "request_adapters"));
+
   planning_pipeline_->checkSolutionPaths(false);
   request_.goal_constraints.resize(1);
 
