@@ -146,11 +146,11 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamp
     kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
 
     // Print joint values
-    ROS_INFO("Joint Values: ");
-    for (size_t i = 0; i < joint_values.size(); ++i)
-    {
-      ROS_INFO("Joint %zu: %f", i, joint_values[i]);
-    }
+    // ROS_INFO("Joint Values: ");
+    // for (size_t i = 0; i < joint_values.size(); ++i)
+    // {
+    //   ROS_INFO("Joint %zu: %f", i, joint_values[i]);
+    // }
   }
   return joint_values;
 }
