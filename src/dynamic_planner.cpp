@@ -120,10 +120,9 @@ const ulong DynamicPlanner::getTrajpoint()
 
 const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
 {
-  return goals_seq;
+  return goals_seq_;
 }
 
-// TODO: verify if it works
 const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
                                                   const std::string& link_name)
 {
@@ -440,7 +439,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   request_.path_constraints                = params_.path_constraints;
 
   // If new goals should not be added to previous ones, clear goals sequence and old trajectory
-  if (!online_replanning) {goals_seq.clear(); trajectory_.joint_trajectory.points.clear();}
+  if (!online_replanning) {goals_seq_.clear(); trajectory_.joint_trajectory.points.clear();}
 
   // For each goal of the array 'positions' given by the user
   for (const auto& position : positions)
@@ -450,7 +449,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
     pos_robot_state->setJointGroupPositions(joint_model_group_name, position);
 
     // Add a kinematic constraint with HIGHER TOLERANCE than Planner V3
-    goals_seq.push_back(kinematic_constraints::constructGoalConstraints(
+    goals_seq_.push_back(kinematic_constraints::constructGoalConstraints(
       *pos_robot_state,   // robot state associated to the currently iterated position
       robot_model_->getJointModelGroup(joint_model_group_name), 
       0.01,               // below radians absolute tolerance
@@ -458,7 +457,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   }
 
   // Calling dynamic planner private function for multiple joint goals
-  plan(goals_seq, trajectory_);
+  plan(goals_seq_, trajectory_);
 
 }
 
@@ -544,6 +543,7 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
   plan(joint_positions, planning_group_name_, false); // TODO: replace with true when we are sure of the replanning mode
 }
 
+// TODO: change comptletely this function when mover decoupling will be done
 // Check trajectory function: individuate an invalide state and correct trajectory online
 void DynamicPlanner::checkTrajectory()
 {
@@ -967,6 +967,9 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
 // Basic private planning function
 void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bool send)
 {
+  // TODO: the following goal constraints request should be a push back 
+  // (this vector should be cleared at the calling of the planning request)
+
   // Set the goal to the MoveIt planning request
   request_.goal_constraints[0] = desired_goal;
   // Set current robot state in the planning scene
@@ -1003,6 +1006,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
       // result_.trajectory_ goes into trajectory_ global class variable
       result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
 
+      // TODO: the following lines (until before the break at line 1019) need to be deleted
       // Update trajectory visualization
       trajectoryVisualizer(trajectory_);
 
@@ -1031,7 +1035,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   }
 }
 
-// Robot planner with vectors of goals and a given trajectory
+// Robot planner with vectors of goals and a given trajectory goal (made of a sequence of desired goals)
 void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_goals,
                           moveit_msgs::RobotTrajectory& robot_trajectory)
 {
@@ -1040,6 +1044,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
   {
     // Plan to the currently considered desired goal
     plan(desired_goal, false);
+    // TODO: add another input to create a robot state which corresponds to the previous goal
 
     // If the planner has not been successfull, break the FOR loop
     if (!success_)

@@ -266,7 +266,7 @@ private:
       geometry_msgs::PoseStamped    final_pose_;        // Final TCP 3D position
       moveit_msgs::RobotTrajectory  trajectory_;        // Moevit msgs about trajectory
       ulong trajpoint_;                                 // Current point of the trajectory considered
-      std::vector<moveit_msgs::Constraints> goals_seq;  // Goals sequence given to the planner
+      std::vector<moveit_msgs::Constraints> goals_seq_; // Goals sequence given to the planner
 
       ulong invalid_state_;           // point of the trajectory where a collision has been found
       bool success_;                  // whereas trajectory planning has been successfull
