@@ -366,6 +366,9 @@ moveit_msgs/RobotState Message
 // Planner V1 -> input: vector of joints final positions
 void DynamicPlanner::plan(const std::vector<double>& final_position)
 {
+  // Check if the goal is not near current joint state
+  if (checkJointDiff(final_position)) {return;}
+
   // Planner V2 is called here
   plan(final_position, planning_group_name_);  // string of joint_model_group_name
 }
@@ -382,7 +385,6 @@ void DynamicPlanner::plan(const std::vector<double>& final_position,
 }
 
 // Planner V3 -> input: as V2 + given robot state
-// THE FOLLOWING FUNCTION STUCTURE IS THE SAME AS THE V2, ONLY ROBOT STATE CHANGES
 void DynamicPlanner::plan(const std::vector<double>& final_position,
                           const std::string& joint_model_group_name,
                           const robot_state::RobotState& robot_state)
@@ -541,7 +543,7 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
 
 }
 
-// Planner V9 -> inputs: vectors of 3D carthesian poses + link_name (usually the end effector
+// Planner V9 -> inputs: vectors of 3D carthesian poses + link_name (usually the end effector)
 //            -> output: planner V5
 void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
                           const std::string& link_name)
@@ -979,6 +981,34 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
 
   // Update trajectory visualization
   trajectoryVisualizer(trajectory_);
+}
+
+// Check given goal is different from current pose to avoid planner warning and blocking
+const bool DynamicPlanner::checkJointDiff(const std::vector<double>& final_position)
+{
+  // Set a reasonable threshold
+  double th = 0.0001;
+  // Counter check: it's increased by 1 if two joint positions are similar
+  uint counter_check = 0;
+  // Iterate above all joints
+  for(uint k = 0; k < final_position.size(); k++)
+  {
+    // If current and goal single joint position are similar
+    if ((joints_values_group_[k] - final_position[k] < +th) && 
+        (joints_values_group_[k] - final_position[k] > -th))
+    {
+      counter_check++;  // Increment counter check
+    }    
+  }
+  if (counter_check == final_position.size())
+  {
+    ROS_WARN("User input error: sent goal state is near or equal to current joint pose.");
+    return true;
+  }
+  else
+  {
+    return false;
+  }  
 }
 
 // Basic private planning function

@@ -295,6 +295,9 @@ private:
     // Visualization function
     void trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory);
 
+    // Check given goal is different from current pose
+    const bool checkJointDiff(const std::vector<double>& final_position);
+
     // CALLBACK FUNCTIONS FOR SUBSCRIBERS
     // Trajectory points current state 
     void trajPointCallback(const std_msgs::Int32::ConstPtr& traj_point);
