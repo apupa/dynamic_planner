@@ -154,25 +154,42 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamp
   return joint_values;
 }
 
-const geometry_msgs::PoseStamped DynamicPlanner::setFKine(const sensor_msgs::JointState::ConstPtr& joint_state)
+const geometry_msgs::PoseStamped DynamicPlanner::get_currentFKine()
+{
+  // Fill the JointState msg
+  sensor_msgs::JointState current_joints_state;
+  current_joints_state.header.seq = 1;
+  current_joints_state.header.frame_id = "base_link";
+  current_joints_state.header.stamp.sec = ros::Time::now().sec;
+  current_joints_state.header.stamp.nsec = ros::Time::now().nsec;
+  current_joints_state.name = joints_names_group_;
+  // Update the msg with current joints values
+  current_joints_state.position = {0.,0.,0.,0.,0.,0.};
+  for (uint k = 0; k < joints_names_group_.size(); k++)
+          {current_joints_state.position[k] = joints_values_group_[k];}
+  // Compute FKINE
+  return getFKine(current_joints_state);
+}
+
+// THE FOLLOWING FUNCTION DOESN'T WORK (error on: const Eigen::Affine3d& ... line)
+const geometry_msgs::PoseStamped DynamicPlanner::getFKine(const sensor_msgs::JointState joint_state)
 {
   // Create a copy of the current joint_model_group_
   const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
 
-  sensor_msgs::JointState js = *joint_state;
-
   // Store joint values into a vector
-  std::vector<double> joint_values =   {0.,0.,0.,0.,0.,0.};
-  for (unsigned int k = 0; k < 6; k++) {joint_values[k] = js.position[k];}
+  std::vector<double> joint_values = {0.,0.,0.,0.,0.,0.};
+  for (unsigned int k = 0; k < 6; k++) {joint_values[k] = joint_state.position[k];}
 
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
   kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
 
-  // Compute the forward kinematics
+  // Compute the forward kinematics -> THIS LINE LEADS TO AN ERROR
   const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name_);
+  
   Eigen::Vector3d translation_vector = end_effector_state.translation();
-  Eigen::Vector3d rotation_angles = end_effector_state.rotation().eulerAngles(1, 2, 0);
+  Eigen::Vector3d rotation_angles = end_effector_state.rotation().eulerAngles(1, 2, 0); 
 
   // Print end-effector pose. Remember that this is in the model frame
   ROS_INFO_STREAM("Translation: \n" << translation_vector << "\n");
@@ -184,7 +201,8 @@ const geometry_msgs::PoseStamped DynamicPlanner::setFKine(const sensor_msgs::Joi
 
   // Fill the pose msg
   geometry_msgs::PoseStamped end_effector_pose;
-  end_effector_pose.header.stamp      = ros::Time::now();
+  end_effector_pose.header.stamp.sec  = ros::Time::now().sec;
+  end_effector_pose.header.stamp.nsec = ros::Time::now().nsec;
   end_effector_pose.header.frame_id   = "base_link";
   end_effector_pose.pose.position.x   = translation_vector[0];
   end_effector_pose.pose.position.y   = translation_vector[1];
@@ -195,8 +213,7 @@ const geometry_msgs::PoseStamped DynamicPlanner::setFKine(const sensor_msgs::Joi
   return end_effector_pose;
 }
 
-// Get the jacobian matrix of the manipulator
-const Eigen::MatrixXd DynamicPlanner::getJacobian ()
+const Eigen::MatrixXd DynamicPlanner::getJacobian()
 {
     // Create a copy of the current joint_model_group_
   const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
@@ -204,7 +221,7 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian ()
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
 
-  // Compute the jacobian
+  // Get the Geometric Jacobian matrix of the manipulator
   Eigen::MatrixXd jacobian;
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
   kinematic_state->getJacobian(joint_model_group,
@@ -1103,7 +1120,7 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
         // Iterate over the joints
         for (uint k = 0; k < joints_names_group_.size(); k++)
           // Store the joints values from the joints map
-          joints_values_group_[k] = joints_map_group_[joints_names_group_[k]];
+          {joints_values_group_[k] = joints_map_group_[joints_names_group_[k]];}
 
         // Log gripper planning group
         ROS_INFO_ONCE("%s joints values received.", planning_group_name_.c_str());
