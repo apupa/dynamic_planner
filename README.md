@@ -54,7 +54,26 @@ int main()
   ...
 ```
 
-where manipulator_name is tha name of the the moveit_planning group, joint_names
+where *manipulator_name* is tha name of the the moveit_planning group, *joint_names* are the name of the joints of the urdf, *vel_factor* and *acc_factor* represent the velocity and acceleration scaling factor (from 0 to 1).
+
+After you create your new node that calls the DynamicPlanner, e.g. manipulator_planner, you have to launch it as:
+
+```
+...
+
+<arg name="planning_plugin" value="ompl_interface/OMPLPlanner" />
+  <arg name="planning_adapters" value="industrial_trajectory_filters/UniformSampleFilter default_planner_request_adapters/AddTimeOptimalParameterization default_planner_request_adapters/FixWorkspaceBounds default_planner_request_adapters/FixStartStateBounds default_planner_request_adapters/FixStartStateCollision default_planner_request_adapters/FixStartStatePathConstraints" />
+
+  <node name="manipulator_planner" pkg="manipulator_planner" type="manipulator_planner" output="screen">
+    <param name="planning_plugin" value="$(arg planning_plugin)" />
+    <param name="request_adapters" value="$(arg planning_adapters)" />
+    <param name="sample_duration" value="0.01"/>
+  </node>
+
+  ...
+```
+
+**NOTE:** Remember that you have also to launche the moveit packages of your robot (planning_context, ...)!
 
 ## Authors
 * **Andrea Pupa** 
