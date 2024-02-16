@@ -88,7 +88,7 @@ After you create your new node that calls the DynamicPlanner, e.g. manipulator_p
 
 ## Reporting Issues
 
-If you encounter any difficulties compiling the nodes or experience issues while using this repository, we encourage you to report them. You can do so by either [opening an issue](https://github.com/apupa/dynamic-planner/issues) directly on GitHub or by sending an email to [andrea.pupa@unimore.it](andrea.pupa@unimore.it).
+If you encounter any difficulties compiling the nodes or experience issues while using this repository, we encourage you to report them. You can do so by either [opening an issue](https://github.com/apupa/dynamic_planner/issues) directly on GitHub or by sending an email to [andrea.pupa@unimore.it](andrea.pupa@unimore.it).
 
 ## Important Note
 
