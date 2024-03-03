@@ -104,7 +104,7 @@ class DynamicPlanner
 {
 public:
 
-  // ---------------------  PUBLIC CONSTRUCTOR ---------------------
+  // --------------------- PUBLIC CONSTRUCTOR ---------------------
 
     DynamicPlanner(const std::string& manipulator_name,
                   const std::vector<std::string>& joints_name, 
@@ -162,18 +162,19 @@ public:
       void plan(const std::vector<double>& final_position);
       void plan(const std::vector<double>& final_position,
                 const std::string&         joint_model_group_name);
-      void plan(const std::vector<double>&     final_position,
+      void plan(const std::vector<double>& final_position,
                 const std::string&             joint_model_group_name,
                 const robot_state::RobotState& robot_state);
       // Multiple JOINTS goals
-      void plan(const std::vector<std::vector<double>>& positions);
+      void plan(const std::vector<std::vector<double>>& positions,
+                bool                                    online_replanning);
       void plan(const std::vector<std::vector<double>>& positions,
                 const std::string&                      joint_model_group_name,
                 bool                                    online_replanning);
       // Single POSITION goal (within 3D carthesian space, operative space)
-      void plan(const geometry_msgs::PoseStamped& final_pose, 
+      void plan(const geometry_msgs::PoseStamped& final_pose,
                 const std::string&                link_name);
-      void plan(const geometry_msgs::PoseStamped& final_pose, 
+      void plan(const geometry_msgs::PoseStamped& final_pose,
                 const std::string&                link_name,
                 const std::string&                joint_model_group_name);
       void plan(const geometry_msgs::PoseStamped& final_pose,
@@ -183,7 +184,9 @@ public:
       // Multiple POSITIONS goals (within 3D carthesian space, operative space)
       void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
                 const std::string&                             link_name);                
-
+      // Cartesian planner
+      double cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints,
+                           const double                            eef_step);
       // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
       void checkTrajectory();
 

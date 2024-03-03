@@ -377,7 +377,7 @@ void DynamicPlanner::plan(const std::vector<double>& final_position)
 void DynamicPlanner::plan(const std::vector<double>& final_position,
                           const std::string& joint_model_group_name)
 {
-  // Update initial robot stare for planning request
+  // Update initial robot state for planning request
   *robot_state_ = planning_scene_->getCurrentState();
 
   // Call planner V3
@@ -426,10 +426,11 @@ void DynamicPlanner::plan(const std::vector<double>& final_position,
 }
 
 // Planner V4 -> input: multiple joints final positions
-void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
+void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
+                          bool  online_replanning)
 {
   // Planner V5 is called here
-  plan(positions, planning_group_name_,false);    // TODO: change true if merging function works
+  plan(positions, planning_group_name_,online_replanning);
 }
 
 // TODO: verify if it actually works
@@ -437,7 +438,7 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions)
 //            -> output: a plan(goal, trajectory), it's the only one with this output
 void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
                           const std::string& joint_model_group_name,
-                          bool online_replanning)
+                          bool  online_replanning)
 {
   // Get the last position as final joint goal
   final_position_ = positions.back();
@@ -463,21 +464,20 @@ void DynamicPlanner::plan(const std::vector<std::vector<double>>& positions,
   // For each goal of the array 'positions' given by the user
   for (const auto& position : positions)
   {
+    robot_state::RobotState goal_state(*robot_state_);
     // Get the robot state associated to the position of the current iteration
-    robot_state::RobotStatePtr pos_robot_state;
-    pos_robot_state->setJointGroupPositions(joint_model_group_name, position);
+    goal_state.setJointGroupPositions(joint_model_group_name, position);
 
     // Add a kinematic constraint with HIGHER TOLERANCE than Planner V3
     goals_seq_.push_back(kinematic_constraints::constructGoalConstraints(
-      *pos_robot_state,   // robot state associated to the currently iterated position
+      goal_state,   // robot state associated to the currently iterated goal position
       robot_model_->getJointModelGroup(joint_model_group_name), 
-      0.01,               // below radians absolute tolerance
-      0.01));             // upper radians absolute tolerance
+      0.001,               // below radians absolute tolerance
+      0.001));             // upper radians absolute tolerance
   }
 
   // Calling dynamic planner private function for multiple joint goals
   plan(goals_seq_, trajectory_);
-
 }
 
 // Planner V6 -> input: 3D carthesian final pose, link_name
@@ -540,10 +540,9 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
 
   // Call the dynamic planner private function for a single goal
   plan(goal_, true);
-
 }
 
-// Planner V9 -> inputs: vectors of 3D carthesian poses + link_name (usually the end effector)
+// Planner V9 -> inputs: vectors of 3D cartesian poses + link_name (usually the end effector)
 //            -> output: planner V5
 void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
                           const std::string& link_name)
@@ -560,6 +559,30 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
 
   // Pass inverted positions to the V5 planner
   plan(joint_positions, planning_group_name_, false); // TODO: replace with true when we are sure of the replanning mode
+}
+
+// Planner V10 -> inputs: vector of 3D cartesian poses
+double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints,
+                                     const double                            eef_step)
+{
+  // Set the move group interface object
+  moveit::planning_interface::MoveGroupInterface move_group_interface(
+                                                planning_group_name_);
+  // Setup cartesian planner
+  const double jump_threshold = 0.0;  // To avoid IK errors
+  double fraction = move_group_interface.computeCartesianPath(
+                  waypoints, eef_step, jump_threshold, trajectory_);
+  // Display results
+  ROS_INFO("Computed cartesian path of %.2f%% fraction achieved", fraction * 100.0);
+  
+  // Display and send trajectory
+  trajectoryVisualizer(trajectory_);
+  // For the robot driver
+  trajectory_pub_.publish(trajectory_.joint_trajectory);
+  // For simulated robot
+  if (sim_) {moveRobot(trajectory_);}
+
+  return fraction;
 }
 
 // TODO: change comptletely this function when mover decoupling will be done
@@ -696,8 +719,8 @@ void DynamicPlanner::checkTrajectory()
   }
 }
 
-// JointState should contain a trajectory already verified as feasible
-/*
+/* JointStateMsg
+   should contain a trajectory already verified as feasible
   JointState:
       Header    header
       string[]  joints_names
@@ -705,13 +728,6 @@ void DynamicPlanner::checkTrajectory()
       float64[] velocity
       float64[] effort
 */
-
-// Move Robot function! A JointState msg is published on the MoveIt! fake controller
-void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
-{
-  joints_pub_.publish(joint_states);
-}
-
 /* moveit_msgs/RobotTrajectory/JointTrajectory/JointTrajectoryPoint[].msg :
       float64[] positions
       float64[] velocities
@@ -720,8 +736,14 @@ void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
       duration  time_from_start
 */
 
+// Move Robot function! A JointState msg is published on the MoveIt! fake controller
+void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
+{
+  joints_pub_.publish(joint_states);
+}
+
 // Move Robot function given a trajectory to compute -> THIS FUNCTION BLOCKS THE CODE RUNNING
-// THIS SHOULD BE PUT IN A DIFFERENT NODE:: TODO
+// TODO: THIS SHOULD BE PUT IN A DIFFERENT NODE
 void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory)
 {
   // Create a JointState empty variable for the fake controller publisher
@@ -767,7 +789,7 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
   stop_pub_       = nh_.advertise<std_msgs::Bool>("/stop_trajectory", 1);
   // ...and subscribers (for robot status update)
   joints_sub_     = nh_.subscribe("/joint_states", 1, &DynamicPlanner::jointsCallback, this);
-  trajpoint_sub_ =  nh_.subscribe("/trajectory_counter", 1, &DynamicPlanner::trajPointCallback, this);
+  trajpoint_sub_  = nh_.subscribe("/trajectory_counter", 1, &DynamicPlanner::trajPointCallback, this);
 
   // Setup planning scene and robot model
   robot_model_loader_ = robot_model_loader::RobotModelLoader("/robot_description");
@@ -938,7 +960,9 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
 
   // If the trajectory input is SMALLER than the running one
   if (robot_trajectory.joint_trajectory.points.size() < trajectory_.joint_trajectory.points.size())
-  {
+  {  
+    ROS_INFO("E qui ci sono arrivato 0");
+
     // Iterate along all the points of the input trajectory
     for (uint k = 0; k < robot_trajectory.joint_trajectory.points.size(); ++k)
     {
@@ -956,12 +980,12 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
       // trajectory_.joint_trajectory.points = robot_trajectory.joint_trajectory.points.push_back(trajectory_.joint_trajectory.points)
       // or
       // trajectory_.joint_trajectory.points = [robot_trajectory.joint_trajectory.points,trajectory_.joint_trajectory.points] -> I BET ON THIS
+      ROS_INFO("Finito il primo IF");
     }
   }
-  
-  // If the trajectory input is BIGGER (or equal) than the running one (it never happens in this library)
+  // If the trajectory input is BIGGER (or equal) than the preempted one
   else
-  {
+  {  
     // Iterate along all the points of the global class trajectory
     for (const auto& traj_pt : trajectory_.joint_trajectory.points)
     {
@@ -973,8 +997,8 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
     // t = [rt,t]
   }  
 
-  // TODO: try this one an comment all above code
-  // trajectory_.joint_trajectory.points = [robot_trajectory.joint_trajectory.points,trajectory_.joint_trajectory.points]
+  // TODO: try this one and comment all above code
+  // trajectory_.joint_trajectory.points = {robot_trajectory.joint_trajectory.points,trajectory_.joint_trajectory.points}
 
   // Publish trajectory
   trajectory_pub_.publish(trajectory_.joint_trajectory);
@@ -1038,7 +1062,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   {
     planning_pipeline_->generatePlan(planning_scene_, request_, result_);
 
-    // Check the result of the planning: if it has FAILED
+    // Check the result of the planning: if it  FAILED
     if (result_.error_code_.val != result_.error_code_.SUCCESS)
     {
       ROS_WARN("Could not compute plan successfully. Trying again (#%d attempt)..",
@@ -1053,7 +1077,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
       // result_.trajectory_ goes into trajectory_ global class variable
       result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
 
-      // TODO: the following lines (until before the break at line 1019) need to be deleted
+      // TODO: the following lines (until before the break below if(send)) need to be deleted
       // Update trajectory visualization
       trajectoryVisualizer(trajectory_);
 
@@ -1086,6 +1110,10 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
 void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_goals,
                           moveit_msgs::RobotTrajectory& robot_trajectory)
 {
+  // At this point, trajectory_ is empty if the robot is standing
+  // If a previous planning command has been launched, trajectory_
+  // may be updated now
+
   // Iterate over all the desired goals
   for (const auto& desired_goal : desired_goals)
   {
@@ -1098,6 +1126,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
       break;
 
     // If the planner has been successful, trajectory is merged
+
     merge(robot_trajectory);
     robot_trajectory = trajectory_;
   }
