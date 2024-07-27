@@ -72,9 +72,6 @@
 #include <moveit_msgs/RobotTrajectory.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
 
-// Global constant definition of the number of joints 
-#define JOINTS_NUM 6
-
 // STRUCT definition of the parameters of the Dynamic Planner
   struct DynamicPlannerParams
   {
