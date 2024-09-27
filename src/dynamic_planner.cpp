@@ -46,13 +46,17 @@
 DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
                                const std::vector<std::string>& joints_name,
                                const double v_factor, const double a_factor,
-                               const bool dynamic_behaviour)
+                               const bool dynamic_behaviour,
+                               const double sample_time,
+                               const double max_velocity)
   : nh_("~"), planning_group_name_(manipulator_name), joints_names_group_(joints_name),
     trajpoint_(0UL), success_(true), joints_group_received_(false),
     obstruction_(false), sim_(false), dynamic_behaviour_(dynamic_behaviour)
 {
   // Load ROS pubs/subs, planning scene, robot model and state, visual tools and the planner
   initialize(v_factor, a_factor);
+
+
 
   // Initialize joints map for robot state update: per each joint name, set its value to 0
   for (const std::string& name : joints_names_group_)
@@ -236,10 +240,10 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian()
 
 void DynamicPlanner::setParams(
                                const std::string& planner_id, const int attempts,
-                               const double time, const double v_factor,
-                               const double a_factor)
+                               const double time, const double v_factor, const double a_factor,
+                               const double time_step, const double max_vel)
 {
-  params_ = DynamicPlannerParams(planner_id, attempts, time, v_factor, a_factor);
+  params_ = DynamicPlannerParams(planner_id, attempts, time, v_factor, a_factor, time_step, max_vel);
 }
 
 void DynamicPlanner::setParams(const DynamicPlannerParams& params)
@@ -562,16 +566,27 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
 }
 
 // Planner V10 -> inputs: vector of 3D cartesian poses
-double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints,
-                                     const double                            eef_step)
+double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints)
 {
   // Set the move group interface object
   moveit::planning_interface::MoveGroupInterface move_group_interface(
                                                 planning_group_name_);
   // Setup cartesian planner
   const double jump_threshold = 0.0;  // To avoid IK errors
-  double fraction = move_group_interface.computeCartesianPath(
-                  waypoints, eef_step, jump_threshold, trajectory_);
+  double eef_step = params_.max_velocity*params_.sample_time; // Ideal distance step
+  double fraction = 0.0;
+  for (int k = 0; k < params_.num_attempts; k++)
+  {
+    fraction = move_group_interface.computeCartesianPath(
+                  waypoints, (pow(10,k))*eef_step, jump_threshold, trajectory_);
+    if (fraction > 0.0) {break;}
+  }
+  // Resample trajectory time
+  for (unsigned int k = 0; k < trajectory_.joint_trajectory.points.size(); k++)
+  {
+    trajectory_.joint_trajectory.points[k].time_from_start = ros::Duration((double)((k)*params_.sample_time));
+  }  
+
   // Display results
   ROS_INFO("Computed cartesian path of %.2f%% fraction achieved", fraction * 100.0);
   
@@ -580,7 +595,7 @@ double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& way
   // For the robot driver
   trajectory_pub_.publish(trajectory_.joint_trajectory);
   // For simulated robot
-  if (sim_) {moveRobot(trajectory_);}
+  if (sim_ && fraction > 0.0) {moveRobot(trajectory_);}
 
   return fraction;
 }
@@ -750,6 +765,8 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   sensor_msgs::JointState trajectory_pose;
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
+  // Setup the rate of the planner execution
+  ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
 
   // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
@@ -757,7 +774,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     trajectory_pose.position = traj_pt.positions;
     // trajectory_pose.velocity = traj_pt.velocities;
     moveRobot(trajectory_pose);
-    ros::Duration(robot_trajectory.joint_trajectory.points[1].time_from_start).sleep(); 
+    traj_exec_rate.sleep();
     // The above ros duration commands says that the sampling time a new trajpoint is given to the publisher 
     // It depends on the uniform sample duration made by the plugin
   }

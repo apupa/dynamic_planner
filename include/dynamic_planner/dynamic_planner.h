@@ -51,6 +51,7 @@
 #include <pluginlib/class_loader.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Duration.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <std_msgs/Int32.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -81,18 +82,23 @@
     double vel_factor    = 99.;                 // velocity factor
     double acc_factor    = 99.;                 // acceleration factor
     moveit_msgs::Constraints path_constraints;  // moveit vector of path constraints
+    double sample_time   = 0.002;               // sample time for cartesian planner
+    double max_velocity  = 0.5;                 // maximum ee velocity for cartesian planner
 
     // Struct constructors declaration for the dynamic planner params setup
     // V1: empty struct
     DynamicPlannerParams() {}
     // V2: passing args as initializers
     DynamicPlannerParams(const std::string& planner_id, const int attempts,
-                        const double time, const double v_factor, const double a_factor)
+                        const double time, const double v_factor, const double a_factor,
+                        const double time_step, const double max_vel)
       : name(planner_id), 
         num_attempts(attempts), 
         planning_time(time), 
         vel_factor(v_factor),
-        acc_factor(a_factor)
+        acc_factor(a_factor),
+        sample_time(time_step),
+        max_velocity(max_vel)
     {}
   };
 
@@ -107,7 +113,9 @@ public:
                   const std::vector<std::string>& joints_name, 
                   const double v_factor = 0.2,
                   const double a_factor = 0.2,
-                  const bool dynamic_behaviour = false);
+                  const bool dynamic_behaviour = false,
+                  const double sample_time = 0.002,
+                  const double max_velocity = 0.5);
 
   // --------------------- PUBLIC FUNCTIONS ---------------------
 
@@ -135,7 +143,8 @@ public:
       // The 'const' indicates that this member function does not modify the state of the object it is called on.
 
       void setParams(const std::string& planner_id, const int attempts, const double time,
-                     const double v_factor, const double a_factor);
+                     const double v_factor, const double a_factor,
+                     const double time_step, const double max_vel);
       void setParams(const DynamicPlannerParams& params);
 
       // Set joints limits as vectors of min-max angles
@@ -182,8 +191,7 @@ public:
       void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
                 const std::string&                             link_name);                
       // Cartesian planner
-      double cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints,
-                           const double                            eef_step);
+      double cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints);
       // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
       void checkTrajectory();
 
