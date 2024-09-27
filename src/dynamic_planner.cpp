@@ -575,6 +575,7 @@ double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& way
   const double jump_threshold = 0.0;  // To avoid IK errors
   double eef_step = params_.max_velocity*params_.sample_time; // Ideal distance step
   double fraction = 0.0;
+  ros::Time start = ros::Time::now();
   for (int k = 0; k < params_.num_attempts; k++)
   {
     fraction = move_group_interface.computeCartesianPath(
@@ -588,7 +589,7 @@ double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& way
   }  
 
   // Display results
-  ROS_INFO("Computed cartesian path of %.2f%% fraction achieved", fraction * 100.0);
+  ROS_INFO("Computed cartesian path of %.2f%% fraction achieved, in time %.6f s", fraction * 100.0,ros::Time::now().toSec()-start.toSec());
   
   // Display and send trajectory
   trajectoryVisualizer(trajectory_);
