@@ -56,8 +56,6 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
   // Load ROS pubs/subs, planning scene, robot model and state, visual tools and the planner
   initialize(v_factor, a_factor);
 
-
-
   // Initialize joints map for robot state update: per each joint name, set its value to 0
   for (const std::string& name : joints_names_group_)
     {joints_map_group_[name] = 0;}
@@ -127,93 +125,94 @@ const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
   return goals_seq_;
 }
 
-const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose,
-                                                  const std::string& link_name)
+const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose)
 {
   // Create a copy of the kinematic state of robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
   std::vector<double> joint_values;
 
   // Create a copy of the current joint_model_group_
-  const robot_state::JointModelGroup* joint_model_group = robot_model_->getJointModelGroup(planning_group_name_);
+  const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
 
   // Perform inverse kinematics to find joint positions
-  bool ik_success = kinematic_state->setFromIK(
-    joint_model_group,    // group of joints to set
-    target_pose.pose,     // the pose the last link in the chain needs to achieve
-    0.1);                 // timeout,  default: 0.0 (no timeout)
-  
-  if (ik_success)
-  {
-    // Get joint values after successful IK
-    kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
+  kinematic_state->setFromIK(
+                  joint_model_group,  // group of joints to set
+                  target_pose.pose,   // the pose the last link in the chain needs to achieve
+                  0.0001);            // timeout,  default: 0.0 (no timeout)
 
-    // Print joint values
-    // ROS_INFO("Joint Values: ");
-    // for (size_t i = 0; i < joint_values.size(); ++i)
-    // {
-    //   ROS_INFO("Joint %zu: %f", i, joint_values[i]);
-    // }
-  }
+  // Get joint values after successful IK
+  kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
+
+  // Print joint values
+  ROS_INFO("Joint Values from Inverse Kinematics:");
+  for (const auto& value : joint_values) {ROS_INFO_STREAM(value);}
+
   return joint_values;
 }
 
-const geometry_msgs::PoseStamped DynamicPlanner::get_currentFKine()
+const Eigen::MatrixXd DynamicPlanner::pseudoInverse(const Eigen::MatrixXd &M)
 {
-  // Fill the JointState msg
-  sensor_msgs::JointState current_joints_state;
-  current_joints_state.header.seq = 1;
-  current_joints_state.header.frame_id = "base_link";
-  current_joints_state.header.stamp.sec = ros::Time::now().sec;
-  current_joints_state.header.stamp.nsec = ros::Time::now().nsec;
-  current_joints_state.name = joints_names_group_;
-  // Update the msg with current joints values
-  current_joints_state.position = {0.,0.,0.,0.,0.,0.};
-  for (uint k = 0; k < joints_names_group_.size(); k++)
-          {current_joints_state.position[k] = joints_values_group_[k];}
-  // Compute FKINE
-  return getFKine(current_joints_state);
+  // Compute the pseudoinverse matrix, often used to invert the Jacobian
+
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  double tolerance = std::numeric_limits<double>::epsilon() * std::max(M.cols(), M.rows()) * svd.singularValues().array().abs()(0);
+  Eigen::MatrixXd pseudoInv = svd.matrixV() * (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
+  
+  // ROS_INFO_STREAM("PseudoInverse: \n" << pseudoInv << "\n");
+
+  return pseudoInv;
 }
 
-// THE FOLLOWING FUNCTION DOESN'T WORK (error on: const Eigen::Affine3d& ... line)
-const geometry_msgs::PoseStamped DynamicPlanner::getFKine(const sensor_msgs::JointState joint_state)
+const geometry_msgs::PoseStamped DynamicPlanner::get_currentFKine(const std::string& ee_link_name)
 {
-  // Create a copy of the current joint_model_group_
-  const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+  return getFKine(joints_values_group_,ee_link_name);
+}
 
-  // Store joint values into a vector
-  std::vector<double> joint_values = {0.,0.,0.,0.,0.,0.};
-  for (unsigned int k = 0; k < 6; k++) {joint_values[k] = joint_state.position[k];}
-
-  // Create a copy of the kinematic state of the required robot model
+const geometry_msgs::PoseStamped DynamicPlanner::getFKine(const std::vector<double>& joint_values,
+                                                          const std::string&         ee_link_name)
+{
+  // Create a RobotState object
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
-  kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
 
-  // Compute the forward kinematics -> THIS LINE LEADS TO AN ERROR
-  const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name_);
-  
+  // Get the JointModelGroup for the robot
+  const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
+
+  // Set the joint values (angles) for the robot state
+  std::vector<double> joint_values_copy = joint_values;
+  kinematic_state->setJointGroupPositions(joint_model_group, joint_values_copy);
+
+  // Make sure the state is valid after setting joint values
+  kinematic_state->update();
+
+  // Get the global transform for the end-effector link
+  const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name);
+
+  // Extract the translation (position) from the Affine3d transform
   Eigen::Vector3d translation_vector = end_effector_state.translation();
-  Eigen::Vector3d rotation_angles = end_effector_state.rotation().eulerAngles(1, 2, 0); 
+  Eigen::Quaterniond rotation_quaternion(end_effector_state.rotation());
 
-  // Print end-effector pose. Remember that this is in the model frame
-  ROS_INFO_STREAM("Translation: \n" << translation_vector << "\n");
-  ROS_INFO_STREAM("Rotation: \n"    << rotation_angles << "\n");
+  // Print the position of the end-effector
+  // ROS_INFO_STREAM("FKine: [" << translation_vector.x()  << ", " 
+  //                            << translation_vector.y()  << ", "
+  //                            << translation_vector.z()  << ", "
+  //                            << rotation_quaternion.x() << ", "
+  //                            << rotation_quaternion.y() << ", " 
+  //                            << rotation_quaternion.z() << ", " 
+  //                            << rotation_quaternion.w() << "] ");                                            
 
-  // Create the quaternion
-  tf2::Quaternion quaternion;
-  quaternion.setRPY(rotation_angles[0], rotation_angles[1], rotation_angles[2]);
-
-  // Fill the pose msg
+  // Create and populate the PoseStamped message
   geometry_msgs::PoseStamped end_effector_pose;
-  end_effector_pose.header.stamp.sec  = ros::Time::now().sec;
-  end_effector_pose.header.stamp.nsec = ros::Time::now().nsec;
-  end_effector_pose.header.frame_id   = "base_link";
-  end_effector_pose.pose.position.x   = translation_vector[0];
-  end_effector_pose.pose.position.y   = translation_vector[1];
-  end_effector_pose.pose.position.z   = translation_vector[2];
-  end_effector_pose.pose.orientation  = tf2::toMsg(quaternion);
+  end_effector_pose.header.frame_id    = "base_link";
+  end_effector_pose.pose.position.x    = translation_vector.x();
+  end_effector_pose.pose.position.y    = translation_vector.y();
+  end_effector_pose.pose.position.z    = translation_vector.z();
 
-  // return value
+  end_effector_pose.pose.orientation.x = rotation_quaternion.x();
+  end_effector_pose.pose.orientation.y = rotation_quaternion.y();
+  end_effector_pose.pose.orientation.z = rotation_quaternion.z();
+  end_effector_pose.pose.orientation.w = rotation_quaternion.w();
+
+  // Return value
   return end_effector_pose;
 }
 
@@ -224,6 +223,13 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian()
 
   // Create a copy of the kinematic state of the required robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  
+  // Make sure the state is valid after setting joint values
+  kinematic_state->update();
+
+  // The last link name is the chain tip specified in the file .srdf
+  // std::vector<std::string> my_list = joint_model_group->getLinkModelNames();
+  // for (unsigned int k=0;k<my_list.size();k++) {std::cout << my_list[k] << " ";}
 
   // Get the Geometric Jacobian matrix of the manipulator
   Eigen::MatrixXd jacobian;
@@ -231,7 +237,8 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian()
   kinematic_state->getJacobian(joint_model_group,
                                kinematic_state->getLinkModel(joint_model_group->getLinkModelNames().back()),
                                reference_point_position, jacobian);
-  ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");
+  
+  // ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");
 
   return jacobian;
 }
@@ -558,7 +565,7 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
   for (const auto& target_pose : target_poses)
   {
     // Add the invertred joint position
-    joint_positions.push_back(invKine(target_pose,ee_link_name_));  // TODO: check if the solution of InvKine doesn't hide multiple solutions
+    joint_positions.push_back(invKine(target_pose));  // TODO: check if the solution of InvKine doesn't hide multiple solutions
   }
 
   // Pass inverted positions to the V5 planner

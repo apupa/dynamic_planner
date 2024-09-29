@@ -132,10 +132,10 @@ public:
       const std::vector<moveit_msgs::Constraints> getGoalsSeq();
 
     // Perform inverse or forward kinematics
-      const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose,
-                                                       const std::string& link_name);
-      const geometry_msgs::PoseStamped get_currentFKine();
-      const geometry_msgs::PoseStamped getFKine(const sensor_msgs::JointState joint_states);
+      const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose);
+      const Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &M);
+      const geometry_msgs::PoseStamped get_currentFKine(const std::string& ee_link_name);
+      const geometry_msgs::PoseStamped getFKine(const std::vector<double>& joint_values,const std::string& ee_link_name_);
       const Eigen::MatrixXd getJacobian();
 
     // Dynamic planner parameters getter and setter
@@ -267,7 +267,7 @@ private:
       PlanningSpace planning_space_;    // MoveIt! planning space object, parent class of useful functions
       std::string planning_link_name_;  // the name of the link as parent frame of the goal pose
       std::string planning_group_;      // name of the group of joints to be controlled
-      std::string ee_link_name_;        // Gripper link name
+      // std::string ee_link_name_;     // Gripper link name
 
       // Planning outputs
       moveit_msgs::Constraints      goal_;              // Moevit msgs about goal constraints 
