@@ -125,7 +125,7 @@ const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
   return goals_seq_;
 }
 
-const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamped& target_pose)
+const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& target_pose)
 {
   // Create a copy of the kinematic state of robot model
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
@@ -137,7 +137,7 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::PoseStamp
   // Perform inverse kinematics to find joint positions
   kinematic_state->setFromIK(
                   joint_model_group,  // group of joints to set
-                  target_pose.pose,   // the pose the last link in the chain needs to achieve
+                  target_pose,        // the pose the last link in the chain needs to achieve
                   0.0001);            // timeout,  default: 0.0 (no timeout)
 
   // Get joint values after successful IK
@@ -163,12 +163,12 @@ const Eigen::MatrixXd DynamicPlanner::pseudoInverse(const Eigen::MatrixXd &M)
   return pseudoInv;
 }
 
-const geometry_msgs::PoseStamped DynamicPlanner::get_currentFKine(const std::string& ee_link_name)
+const geometry_msgs::Pose DynamicPlanner::get_currentFKine(const std::string& ee_link_name)
 {
   return getFKine(joints_values_group_,ee_link_name);
 }
 
-const geometry_msgs::PoseStamped DynamicPlanner::getFKine(const std::vector<double>& joint_values,
+const geometry_msgs::Pose DynamicPlanner::getFKine(const std::vector<double>& joint_values,
                                                           const std::string&         ee_link_name)
 {
   // Create a RobotState object
@@ -201,16 +201,15 @@ const geometry_msgs::PoseStamped DynamicPlanner::getFKine(const std::vector<doub
   //                            << rotation_quaternion.w() << "] ");                                            
 
   // Create and populate the PoseStamped message
-  geometry_msgs::PoseStamped end_effector_pose;
-  end_effector_pose.header.frame_id    = "base_link";
-  end_effector_pose.pose.position.x    = translation_vector.x();
-  end_effector_pose.pose.position.y    = translation_vector.y();
-  end_effector_pose.pose.position.z    = translation_vector.z();
+  geometry_msgs::Pose end_effector_pose;
+  end_effector_pose.position.x    = translation_vector.x();
+  end_effector_pose.position.y    = translation_vector.y();
+  end_effector_pose.position.z    = translation_vector.z();
 
-  end_effector_pose.pose.orientation.x = rotation_quaternion.x();
-  end_effector_pose.pose.orientation.y = rotation_quaternion.y();
-  end_effector_pose.pose.orientation.z = rotation_quaternion.z();
-  end_effector_pose.pose.orientation.w = rotation_quaternion.w();
+  end_effector_pose.orientation.x = rotation_quaternion.x();
+  end_effector_pose.orientation.y = rotation_quaternion.y();
+  end_effector_pose.orientation.z = rotation_quaternion.z();
+  end_effector_pose.orientation.w = rotation_quaternion.w();
 
   // Return value
   return end_effector_pose;
@@ -565,7 +564,7 @@ void DynamicPlanner::plan(const std::vector<geometry_msgs::PoseStamped>& target_
   for (const auto& target_pose : target_poses)
   {
     // Add the invertred joint position
-    joint_positions.push_back(invKine(target_pose));  // TODO: check if the solution of InvKine doesn't hide multiple solutions
+    joint_positions.push_back(invKine(target_pose.pose));  // TODO: check if the solution of InvKine doesn't hide multiple solutions
   }
 
   // Pass inverted positions to the V5 planner

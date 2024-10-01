@@ -132,11 +132,11 @@ public:
       const std::vector<moveit_msgs::Constraints> getGoalsSeq();
 
     // Perform inverse or forward kinematics
-      const std::vector<double> invKine(const geometry_msgs::PoseStamped& target_pose);
-      const Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &M);
-      const geometry_msgs::PoseStamped get_currentFKine(const std::string& ee_link_name);
-      const geometry_msgs::PoseStamped getFKine(const std::vector<double>& joint_values,const std::string& ee_link_name_);
-      const Eigen::MatrixXd getJacobian();
+      const std::vector<double> invKine(const geometry_msgs::Pose& target_pose);
+      const Eigen::MatrixXd     pseudoInverse(const Eigen::MatrixXd &M);
+      const geometry_msgs::Pose get_currentFKine(const std::string& ee_link_name);
+      const geometry_msgs::Pose getFKine(const std::vector<double>& joint_values,const std::string& ee_link_name_);
+      const Eigen::MatrixXd     getJacobian();
 
     // Dynamic planner parameters getter and setter
       DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
