@@ -169,7 +169,7 @@ const geometry_msgs::Pose DynamicPlanner::get_currentFKine(const std::string& ee
 }
 
 const geometry_msgs::Pose DynamicPlanner::getFKine(const std::vector<double>& joint_values,
-                                                          const std::string&         ee_link_name)
+                                                   const std::string&         ee_link_name)
 {
   // Create a RobotState object
   robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
