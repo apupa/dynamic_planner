@@ -117,6 +117,8 @@ public:
                   const double sample_time = 0.002,
                   const double max_velocity = 0.5);
 
+    std::vector<double> joints_values_group_; // Joints values   
+
   // --------------------- PUBLIC FUNCTIONS ---------------------
 
     // MoveIt! gets planning scene and collision objects
@@ -230,7 +232,6 @@ private:
       DynamicPlannerParams params_;
       std::string planning_group_name_;                           // Planning group
       std::vector<std::string> joints_names_group_;               // Joints group names
-      std::vector<double> joints_values_group_;                   // Joints values      
       std::unordered_map<std::string, double> joints_map_group_;  // Set group joints names and values through mapping
       bool dynamic_behaviour_;                                    // Set automatic check trajectory within the ROS spinner
 

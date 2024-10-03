@@ -778,7 +778,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
   {
     trajectory_pose.position = traj_pt.positions;
-    // trajectory_pose.velocity = traj_pt.velocities;
+    trajectory_pose.velocity = traj_pt.velocities;
     moveRobot(trajectory_pose);
     traj_exec_rate.sleep();
     // The above ros duration commands says that the sampling time a new trajpoint is given to the publisher 
