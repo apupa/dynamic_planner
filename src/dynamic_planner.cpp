@@ -138,7 +138,7 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& tar
   kinematic_state->setFromIK(
                   joint_model_group,  // group of joints to set
                   target_pose,        // the pose the last link in the chain needs to achieve
-                  0.0001);            // timeout,  default: 0.0 (no timeout)
+                  0.001);             // timeout,  default: 0.0 (no timeout)
 
   // Get joint values after successful IK
   kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
@@ -244,8 +244,7 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian()
 
 //--------------------- SETTER FUNCTIONS -------------------------------------//
 
-void DynamicPlanner::setParams(
-                               const std::string& planner_id, const int attempts,
+void DynamicPlanner::setParams(const std::string& planner_id, const int attempts,
                                const double time, const double v_factor, const double a_factor,
                                const double time_step, const double max_vel)
 {
