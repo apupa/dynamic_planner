@@ -51,7 +51,7 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
                                const double max_velocity)
   : nh_("~"), planning_group_name_(manipulator_name), joints_names_group_(joints_name),
     trajpoint_(0UL), success_(true), joints_group_received_(false),
-    obstruction_(false), sim_(false), dynamic_behaviour_(dynamic_behaviour)
+    obstruction_(false), dynamic_behaviour_(dynamic_behaviour)
 {
   // Load ROS pubs/subs, planning scene, robot model and state, visual tools and the planner
   initialize(v_factor, a_factor);
@@ -350,12 +350,6 @@ void DynamicPlanner::setScale(const double link_scale)
   ROS_INFO("Setting link scale to %.3f", link_scale);
 }
 
-// Set sim mode: true for simulation, false for debug
-void DynamicPlanner::setSimMode(const bool value) 
-{
-  sim_ = value;
-}
-
 /*
 RobotState msg type
 moveit_msgs/RobotState Message
@@ -601,7 +595,7 @@ double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& way
   // For the robot driver
   trajectory_pub_.publish(trajectory_.joint_trajectory);
   // For simulated robot
-  if (sim_ && fraction > 0.0) {moveRobot(trajectory_);}
+  if (fraction > 0.0) {moveRobot(trajectory_);}
 
   return fraction;
 }
@@ -763,8 +757,7 @@ void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
   joints_pub_.publish(joint_states);
 }
 
-// Move Robot function given a trajectory to compute -> THIS FUNCTION BLOCKS THE CODE RUNNING
-// TODO: THIS SHOULD BE PUT IN A DIFFERENT NODE
+// Move Robot function given a trajectory to compute
 void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory)
 {
   // Create a JointState empty variable for the fake controller publisher
@@ -772,25 +765,28 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
   // Setup the rate of the planner execution
+  // Hypothesis: all the points of the trajectory are uniformely sampled in time; if not, thery are forced here
   ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
 
   // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
   {
+    // Check if the computed trajectory is still clean
+    checkTrajectory();
+    // Fill the trajecory msg (the fake controller watches only the positions, the real one uses both positions and velocities)
     trajectory_pose.position = traj_pt.positions;
     trajectory_pose.velocity = traj_pt.velocities;
+    // Execute the move
     moveRobot(trajectory_pose);
+    // Trajectory rate waiting
     traj_exec_rate.sleep();
-    // The above ros duration commands says that the sampling time a new trajpoint is given to the publisher 
-    // It depends on the uniform sample duration made by the plugin
   }
 }
 
 // Spin ROS (the loop rate is set in the proper node)
 void DynamicPlanner::spinner() 
 { 
-  ros::spinOnce(); 
-  checkTrajectory();
+  ros::spinOnce();
 }
 
 // Check if the planner has received group definition, so the dynamic planner can start working
@@ -1100,24 +1096,22 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
       // result_.trajectory_ goes into trajectory_ global class variable
       result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
 
-      // TODO: the following lines (until before the break below if(send)) need to be deleted
       // Update trajectory visualization
       trajectoryVisualizer(trajectory_);
 
-      // If the user (input of the function) want to make the robot move (not just display)
+      // If the user (input of the function) want to make the robot move (not just planning)
       if (send)
       {
-        // For robot driver
+        // Publish the entire trajectory
         trajectory_pub_.publish(trajectory_.joint_trajectory);
 
-        // For simulated robot
-        if (sim_) {moveRobot(trajectory_);}
+        // Publish recupersively the robtot pos/vel setpoints
+        moveRobot(trajectory_);
       }
 
       break;
     }
   }
-  //  restoreOriginalJointsLimits();
 
   // If the planner has exceeded the number of attempts
   if (!success_)

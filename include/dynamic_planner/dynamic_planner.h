@@ -79,8 +79,8 @@
     std::string name     = "RRTConnect";        // name of the planner method (look up from list in ompl_planning.yaml)
     int num_attempts     = 5;                   // max number of attempts to find a trajectory
     double planning_time = 5;                   // maximum planning time in seconds (default 0: no limit)
-    double vel_factor    = 99.;                 // velocity factor
-    double acc_factor    = 99.;                 // acceleration factor
+    double vel_factor    = 1.;                  // velocity factor
+    double acc_factor    = 1.;                  // acceleration factor
     moveit_msgs::Constraints path_constraints;  // moveit vector of path constraints
     double sample_time   = 0.002;               // sample time for cartesian planner
     double max_velocity  = 0.5;                 // maximum ee velocity for cartesian planner
@@ -117,7 +117,8 @@ public:
                   const double sample_time = 0.002,
                   const double max_velocity = 0.5);
 
-    std::vector<double> joints_values_group_; // Joints values   
+    // Current joints values 
+    std::vector<double> joints_values_group_;  
 
   // --------------------- PUBLIC FUNCTIONS ---------------------
 
@@ -161,9 +162,6 @@ public:
       // Robot collision safe zones setup
       void setPadding(const double link_padding); // enlarge the size of robot model contours 
       void setScale(const double link_scale);     // scale the collision by a primitive size
-
-      // Simulation setup -> true for sim or false for debug
-      void setSimMode(const bool value);
 
       // PLANNING FUNCTIONS -> each versions is adapt for different kind of input types
       // Single JOINT goal
@@ -282,7 +280,6 @@ private:
       bool success_;                  // whereas trajectory planning has been successfull
       bool joints_group_received_;    // Check if joints group has been received from the planner
       bool obstruction_;              // wheather an obstacle is on the robot path (1) or not (0)
-      bool sim_;                      // Simulation status: 1 for simulation, 0 for debug
 
   // ---------------------  PRIVATE FUNCTIONS ------------------
     // Initialization of the planner, the node and other params
