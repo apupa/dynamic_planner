@@ -105,109 +105,109 @@
 // CLASS DECLARATION FOR DYNAMIC PLANNER
 class DynamicPlanner
 {
-public:
+  public:
 
-  // --------------------- PUBLIC CONSTRUCTOR ---------------------
+    // --------------------- PUBLIC CONSTRUCTOR ---------------------
 
-    DynamicPlanner(const std::string& manipulator_name,
-                  const std::vector<std::string>& joints_name, 
-                  const double v_factor = 0.2,
-                  const double a_factor = 0.2,
-                  const bool dynamic_behaviour = false,
-                  const double sample_time = 0.002,
-                  const double max_velocity = 0.5);
+      DynamicPlanner(const std::string& manipulator_name,
+                    const std::vector<std::string>& joints_name, 
+                    const double v_factor = 0.2,
+                    const double a_factor = 0.2,
+                    const bool dynamic_behaviour = false,
+                    const double sample_time = 0.002,
+                    const double max_velocity = 0.5);
 
-    // Current joints values 
-    std::vector<double> joints_values_group_;  
+      // Current joints values 
+      std::vector<double> joints_values_group_;  
 
-  // --------------------- PUBLIC FUNCTIONS ---------------------
+    // --------------------- PUBLIC FUNCTIONS ---------------------
 
-    // MoveIt! gets planning scene and collision objects
-      std::vector<moveit_msgs::CollisionObject>& getCollisionObjects();
-      std::vector<moveit_msgs::AttachedCollisionObject>& getAttachedCollisionObjects();
-      moveit::planning_interface::PlanningSceneInterface& getPlanningSceneInterface();
-      const planning_scene::PlanningScenePtr getPlanningScenePtr();
-      const moveit_visual_tools::MoveItVisualToolsPtr getVisualToolsPtr();
+      // MoveIt! gets planning scene and collision objects
+        std::vector<moveit_msgs::CollisionObject>& getCollisionObjects();
+        std::vector<moveit_msgs::AttachedCollisionObject>& getAttachedCollisionObjects();
+        moveit::planning_interface::PlanningSceneInterface& getPlanningSceneInterface();
+        const planning_scene::PlanningScenePtr getPlanningScenePtr();
+        const moveit_visual_tools::MoveItVisualToolsPtr getVisualToolsPtr();
 
-    // Get current trajectory state
-      const moveit_msgs::RobotTrajectory getTrajectory();
-      const ulong getTrajpoint();
-      const std::vector<moveit_msgs::Constraints> getGoalsSeq();
+      // Get current trajectory state
+        const moveit_msgs::RobotTrajectory getTrajectory();
+        const ulong getTrajpoint();
+        const std::vector<moveit_msgs::Constraints> getGoalsSeq();
 
-    // Perform inverse or forward kinematics
-      const std::vector<double> invKine(const geometry_msgs::Pose& target_pose);
-      const Eigen::MatrixXd     pseudoInverse(const Eigen::MatrixXd &M);
-      const geometry_msgs::Pose get_currentFKine(const std::string& ee_link_name);
-      const geometry_msgs::Pose getFKine(const std::vector<double>& joint_values,const std::string& ee_link_name_);
-      const Eigen::MatrixXd     getJacobian();
+      // Perform inverse or forward kinematics
+        const std::vector<double> invKine(const geometry_msgs::Pose& target_pose);
+        const Eigen::MatrixXd     pseudoInverse(const Eigen::MatrixXd &M);
+        const geometry_msgs::Pose get_currentFKine(const std::string& ee_link_name);
+        const geometry_msgs::Pose getFKine(const std::vector<double>& joint_values,const std::string& ee_link_name_);
+        const Eigen::MatrixXd     getJacobian();
 
-    // Dynamic planner parameters getter and setter
-      DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
-      // The 'const' indicates that this member function does not modify the state of the object it is called on.
+      // Dynamic planner parameters getter and setter
+        DynamicPlannerParams getParams() const { return params_; }  // Getter is already implemented here!!!
+        // The 'const' indicates that this member function does not modify the state of the object it is called on.
 
-      void setParams(const std::string& planner_id, const int attempts, const double time,
-                     const double v_factor, const double a_factor,
-                     const double time_step, const double max_vel);
-      void setParams(const DynamicPlannerParams& params);
+        void setParams(const std::string& planner_id, const int attempts, const double time,
+                      const double v_factor, const double a_factor,
+                      const double time_step, const double max_vel);
+        void setParams(const DynamicPlannerParams& params);
 
-      // Set joints limits as vectors of min-max angles
-      void setJointsLimits(const std::vector<std::string>& joints_names,
-                          const std::vector<double>&       max_angles,
-                          const std::vector<double>&       min_angles);
+        // Set joints limits as vectors of min-max angles
+        void setJointsLimits(const std::vector<std::string>& joints_names,
+                            const std::vector<double>&       max_angles,
+                            const std::vector<double>&       min_angles);
 
-      // Path and wrist constraints setup 
-      void setPathConstraint(const moveit_msgs::Constraints constraints);
-      void clearPathConstraint();
-      
-      // Robot collision safe zones setup
-      void setPadding(const double link_padding); // enlarge the size of robot model contours 
-      void setScale(const double link_scale);     // scale the collision by a primitive size
+        // Path and wrist constraints setup 
+        void setPathConstraint(const moveit_msgs::Constraints constraints);
+        void clearPathConstraint();
+        
+        // Robot collision safe zones setup
+        void setPadding(const double link_padding); // enlarge the size of robot model contours 
+        void setScale(const double link_scale);     // scale the collision by a primitive size
 
-      // PLANNING FUNCTIONS -> each versions is adapt for different kind of input types
-      // Single JOINT goal
-      void plan(const std::vector<double>& final_position);
-      void plan(const std::vector<double>& final_position,
-                const std::string&         joint_model_group_name);
-      void plan(const std::vector<double>& final_position,
-                const std::string&             joint_model_group_name,
-                const robot_state::RobotState& robot_state);
-      // Multiple JOINTS goals
-      void plan(const std::vector<std::vector<double>>& positions,
-                bool                                    online_replanning);
-      void plan(const std::vector<std::vector<double>>& positions,
-                const std::string&                      joint_model_group_name,
-                bool                                    online_replanning);
-      // Single POSITION goal (within 3D carthesian space, operative space)
-      void plan(const geometry_msgs::PoseStamped& final_pose,
-                const std::string&                link_name);
-      void plan(const geometry_msgs::PoseStamped& final_pose,
-                const std::string&                link_name,
-                const std::string&                joint_model_group_name);
-      void plan(const geometry_msgs::PoseStamped& final_pose,
-                const std::string&                link_name,
-                const std::string&                joint_model_group_name,
-                const robot_state::RobotState&    robot_state);
-      // Multiple POSITIONS goals (within 3D carthesian space, operative space)
-      void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
-                const std::string&                             link_name);                
-      // Cartesian planner
-      double cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints);
-      // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
-      void checkTrajectory();
+        // PLANNING FUNCTIONS -> each versions is adapt for different kind of input types
+        // Single JOINT goal
+        void plan(const std::vector<double>& final_position);
+        void plan(const std::vector<double>& final_position,
+                  const std::string&         joint_model_group_name);
+        void plan(const std::vector<double>& final_position,
+                  const std::string&             joint_model_group_name,
+                  const robot_state::RobotState& robot_state);
+        // Multiple JOINTS goals
+        void plan(const std::vector<std::vector<double>>& positions,
+                  bool                                    online_replanning);
+        void plan(const std::vector<std::vector<double>>& positions,
+                  const std::string&                      joint_model_group_name,
+                  bool                                    online_replanning);
+        // Single POSITION goal (within 3D carthesian space, operative space)
+        void plan(const geometry_msgs::PoseStamped& final_pose,
+                  const std::string&                link_name);
+        void plan(const geometry_msgs::PoseStamped& final_pose,
+                  const std::string&                link_name,
+                  const std::string&                joint_model_group_name);
+        void plan(const geometry_msgs::PoseStamped& final_pose,
+                  const std::string&                link_name,
+                  const std::string&                joint_model_group_name,
+                  const robot_state::RobotState&    robot_state);
+        // Multiple POSITIONS goals (within 3D carthesian space, operative space)
+        void plan(const std::vector<geometry_msgs::PoseStamped>& target_poses,
+                  const std::string&                             link_name);                
+        // Cartesian planner
+        double cartesianPlan(const std::vector<geometry_msgs::Pose>& waypoints);
+        // Check trajectory feasibility as long as the dynamic object moves or enters/exits from the scene
+        void checkTrajectory();
 
-      // MOVE ROBOT FUNCTIONS
-      // Robot moving function given joint states 
-      void moveRobot(const sensor_msgs::JointState& joint_states);
-      // Robot moving function given a trajectory setpoint
-      void moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory);
+        // MOVE ROBOT FUNCTIONS
+        // Robot moving function given joint states 
+        void moveRobot(const sensor_msgs::JointState& joint_states);
+        // Robot moving function given a trajectory setpoint
+        void moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory);
 
-      // ROS spinning function
-      void spinner(void);
+        // ROS spinning function
+        void spinner(void);
 
-      // Check if dynamic planner is ready to work
-      bool isReady() const;  
-  
-private:
+        // Check if dynamic planner is ready to work
+        bool isReady() const;  
+    
+  private:
 
   // ---------------------  PRIVATE ENUMS -------------------
     // Planning space enum definition -> standard joints and cartesian spaces
