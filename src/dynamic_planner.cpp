@@ -75,10 +75,10 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
   robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
 
   // Move virtual robot to the initial position
-  sensor_msgs::JointState initial_pose_msg;
-  initial_pose_msg.name     = joints_names_group_;
-  initial_pose_msg.position = joints_values_group_;
-  moveRobot(initial_pose_msg);
+  // sensor_msgs::JointState initial_pose_msg;
+  // initial_pose_msg.name     = joints_names_group_;
+  // initial_pose_msg.position = joints_values_group_;
+  // moveRobot(initial_pose_msg);
 }
 
 //--------------------- PUBLIC FUNCTIONS -------------------------------------//
@@ -801,7 +801,7 @@ bool DynamicPlanner::isReady() const
 // Planner initialization
 void DynamicPlanner::initialize(const double v_factor, const double a_factor)
 {
-  // Setup publishers (for output trajectory) ...
+  // Setup publishers (for output trajectory)
   joints_pub_     = nh_.advertise<sensor_msgs::JointState>(
                     "/move_group/fake_controller_joint_states", 1);  
   trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("/trajectory", 1);

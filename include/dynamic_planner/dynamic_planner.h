@@ -43,64 +43,64 @@
 // IMPORT LIBRARIES
 
 //C++ Libraries
-#include <cmath>
-#include <unordered_map> // https://en.cppreference.com/w/cpp/container/unordered_map
+  #include <cmath>
+  #include <unordered_map> // https://en.cppreference.com/w/cpp/container/unordered_map
 
 // ROS Libaries
-#include <control_msgs/JointTrajectoryControllerState.h>
-#include <pluginlib/class_loader.h>
-#include <ros/ros.h>
-#include <std_msgs/Bool.h>
-#include <std_msgs/Duration.h>
-#include <std_msgs/Float64MultiArray.h>
-#include <std_msgs/Int32.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2/LinearMath/Quaternion.h>
+  #include <control_msgs/JointTrajectoryControllerState.h>
+  #include <pluginlib/class_loader.h>
+  #include <ros/ros.h>
+  #include <std_msgs/Bool.h>
+  #include <std_msgs/Duration.h>
+  #include <std_msgs/Float64MultiArray.h>
+  #include <std_msgs/Int32.h>
+  #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+  #include <tf2/LinearMath/Quaternion.h>
 
 // MoveIt! Libaries
-#include <moveit/collision_detection/collision_tools.h>
-#include <moveit/kinematic_constraints/utils.h>
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_interface/planning_interface.h>
-#include <moveit/planning_pipeline/planning_pipeline.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
-#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
-#include <moveit/robot_model_loader/robot_model_loader.h>
-#include <moveit/robot_state/conversions.h>
-#include <moveit/trajectory_processing/iterative_spline_parameterization.h>
-#include <moveit_msgs/DisplayTrajectory.h>
-#include <moveit_msgs/PlanningScene.h>
-#include <moveit_msgs/RobotTrajectory.h>
-#include <moveit_visual_tools/moveit_visual_tools.h>
+  #include <moveit/collision_detection/collision_tools.h>
+  #include <moveit/kinematic_constraints/utils.h>
+  #include <moveit/move_group_interface/move_group_interface.h>
+  #include <moveit/planning_interface/planning_interface.h>
+  #include <moveit/planning_pipeline/planning_pipeline.h>
+  #include <moveit/planning_scene_interface/planning_scene_interface.h>
+  #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
+  #include <moveit/robot_model_loader/robot_model_loader.h>
+  #include <moveit/robot_state/conversions.h>
+  #include <moveit/trajectory_processing/iterative_spline_parameterization.h>
+  #include <moveit_msgs/DisplayTrajectory.h>
+  #include <moveit_msgs/PlanningScene.h>
+  #include <moveit_msgs/RobotTrajectory.h>
+  #include <moveit_visual_tools/moveit_visual_tools.h>
 
 // STRUCT definition of the parameters of the Dynamic Planner
-  struct DynamicPlannerParams
-  {
-    std::string name     = "RRTConnect";        // name of the planner method (look up from list in ompl_planning.yaml)
-    int num_attempts     = 5;                   // max number of attempts to find a trajectory
-    double planning_time = 5;                   // maximum planning time in seconds (default 0: no limit)
-    double vel_factor    = 1.;                  // velocity factor
-    double acc_factor    = 1.;                  // acceleration factor
-    moveit_msgs::Constraints path_constraints;  // moveit vector of path constraints
-    double sample_time   = 0.002;               // sample time for cartesian planner
-    double max_velocity  = 0.5;                 // maximum ee velocity for cartesian planner
+struct DynamicPlannerParams
+{
+  std::string name     = "RRTConnect";        // name of the planner method (look up from list in ompl_planning.yaml)
+  int num_attempts     = 5;                   // max number of attempts to find a trajectory
+  double planning_time = 5;                   // maximum planning time in seconds (default 0: no limit)
+  double vel_factor    = 1.;                  // velocity factor
+  double acc_factor    = 1.;                  // acceleration factor
+  moveit_msgs::Constraints path_constraints;  // moveit vector of path constraints
+  double sample_time   = 0.002;               // sample time for cartesian planner
+  double max_velocity  = 0.5;                 // maximum ee velocity for cartesian planner
 
-    // Struct constructors declaration for the dynamic planner params setup
-    // V1: empty struct
-    DynamicPlannerParams() {}
-    // V2: passing args as initializers
-    DynamicPlannerParams(const std::string& planner_id, const int attempts,
-                        const double time, const double v_factor, const double a_factor,
-                        const double time_step, const double max_vel)
-      : name(planner_id), 
-        num_attempts(attempts), 
-        planning_time(time), 
-        vel_factor(v_factor),
-        acc_factor(a_factor),
-        sample_time(time_step),
-        max_velocity(max_vel)
-    {}
-  };
+  // Struct constructors declaration for the dynamic planner params setup
+  // V1: empty struct
+  DynamicPlannerParams() {}
+  // V2: passing args as initializers
+  DynamicPlannerParams(const std::string& planner_id, const int attempts,
+                      const double time, const double v_factor, const double a_factor,
+                      const double time_step, const double max_vel)
+    : name(planner_id), 
+      num_attempts(attempts), 
+      planning_time(time), 
+      vel_factor(v_factor),
+      acc_factor(a_factor),
+      sample_time(time_step),
+      max_velocity(max_vel)
+  {}
+};
 
 // CLASS DECLARATION FOR DYNAMIC PLANNER
 class DynamicPlanner

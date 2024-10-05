@@ -39,15 +39,13 @@ find_package(Boost REQUIRED system filesystem date_time thread)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES dynamic_planner
-  INCLUDE_DIRS
   ${THIS_PACKAGE_INCLUDE_DIRS}
   CATKIN_DEPENDS
   moveit_core
   moveit_visual_tools
   moveit_ros_planning_interface
   interactive_markers
-  DEPENDS
-  EIGEN3
+  DEPENDS EIGEN3
 )
 
 include_directories(
