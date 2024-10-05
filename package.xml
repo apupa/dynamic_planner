@@ -5,7 +5,7 @@
   <name>dynamic_planner</name>
   <version>1.2.4</version>
   <description> Dynamic planner library used for Italo Almirante's internship project, written by Andrea Pupa</description>
-  <maintainer email="255778@studenti.unimore.it">Italo Almirante</maintainer>
+  <maintainer email="italo.almirante@unimore.it">Italo Almirante</maintainer>
   <maintainer email="apupa@unimore.it">Andrea Pupa</maintainer>
   <license>Apache License 2.0</license>
 
@@ -18,18 +18,18 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>visualization_msgs</build_depend>
   <build_depend>pluginlib</build_depend>
-  <build_depend>eigen</build_depend>
+  <!-- <build_depend>eigen</build_depend> -->
   <build_depend>moveit_core</build_depend>
   <build_depend>moveit_ros_planning_interface</build_depend>
   <build_depend>moveit_ros_perception</build_depend>
-  <build_depend>interactive_markers</build_depend>
-  <build_depend>geometric_shapes</build_depend>
+  <!-- <build_depend>interactive_markers</build_depend>
+  <build_depend>geometric_shapes</build_depend> -->
   <build_depend>moveit_visual_tools</build_depend>
-  <build_depend>pcl_ros</build_depend>
+  <!-- <build_depend>pcl_ros</build_depend>
   <build_depend>pcl_conversions</build_depend>
-  <build_depend>rosbag</build_depend>
+  <build_depend>rosbag</build_depend> -->
   <build_depend>tf2_ros</build_depend>
-  <build_depend>tf2_eigen</build_depend>
+  <!-- <build_depend>tf2_eigen</build_depend> -->
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>industrial_trajectory_filters</build_depend>
   <build_export_depend>roscpp</build_export_depend>
@@ -41,24 +41,22 @@
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>industrial_trajectory_filters</exec_depend>
 
-  <exec_depend>panda_moveit_config</exec_depend>
+  <!-- <exec_depend>panda_moveit_config</exec_depend> -->
   <exec_depend>pluginlib</exec_depend>
   <exec_depend>moveit_core</exec_depend>
   <exec_depend>moveit_commander</exec_depend>
   <exec_depend>moveit_fake_controller_manager</exec_depend>
   <exec_depend>moveit_ros_planning_interface</exec_depend>
   <exec_depend>moveit_ros_perception</exec_depend>
-  <exec_depend>interactive_markers</exec_depend>
+  <!-- <exec_depend>interactive_markers</exec_depend> -->
   <exec_depend>moveit_visual_tools</exec_depend>
-  <exec_depend>joy</exec_depend>
-  <exec_depend>pcl_ros</exec_depend>
-  <exec_depend>pcl_conversions</exec_depend>
-  <exec_depend>rosbag</exec_depend>
+  <!-- <exec_depend>joy</exec_depend>-->
+  <!-- <exec_depend>pcl_ros</exec_depend>-->
+  <!-- <exec_depend>pcl_conversions</exec_depend> -->
+  <!-- <exec_depend>rosbag</exec_depend> -->
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf2_eigen</exec_depend>
+  <!-- <exec_depend>tf2_eigen</exec_depend> -->
   <exec_depend>tf2_geometry_msgs</exec_depend>
-
-
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

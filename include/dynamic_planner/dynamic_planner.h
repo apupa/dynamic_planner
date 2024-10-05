@@ -281,6 +281,10 @@ class DynamicPlanner
       bool joints_group_received_;    // Check if joints group has been received from the planner
       bool obstruction_;              // wheather an obstacle is on the robot path (1) or not (0)
 
+      // Efficiency variables for kine computations
+            robot_state::RobotStatePtr kinematic_state_;
+      const robot_state::JointModelGroup* joint_model_group;
+
   // ---------------------  PRIVATE FUNCTIONS ------------------
     // Initialization of the planner, the node and other params
     void initialize(const double v_factor, const double a_factor);

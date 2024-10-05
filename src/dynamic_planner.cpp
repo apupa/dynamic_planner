@@ -79,6 +79,10 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
   // initial_pose_msg.name     = joints_names_group_;
   // initial_pose_msg.position = joints_values_group_;
   // moveRobot(initial_pose_msg);
+
+  // Efficiency variable to compute robot kinematics values
+  kinematic_state_ = std::make_shared<robot_state::RobotState>(robot_model_);
+  joint_model_group = joint_model_group_;
 }
 
 //--------------------- PUBLIC FUNCTIONS -------------------------------------//
@@ -127,21 +131,23 @@ const std::vector<moveit_msgs::Constraints> DynamicPlanner::getGoalsSeq()
 
 const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& target_pose)
 {
-  // Create a copy of the kinematic state of robot model
-  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  // // Create a copy of the kinematic state of robot model
+  // robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+
+  // // Create a copy of the current joint_model_group_
+  // const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
+
+  // Declare the vector to store joint values
   std::vector<double> joint_values;
 
-  // Create a copy of the current joint_model_group_
-  const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
-
   // Perform inverse kinematics to find joint positions
-  kinematic_state->setFromIK(
+  kinematic_state_->setFromIK(
                   joint_model_group,  // group of joints to set
                   target_pose,        // the pose the last link in the chain needs to achieve
                   0.001);             // timeout,  default: 0.0 (no timeout)
 
   // Get joint values after successful IK
-  kinematic_state->copyJointGroupPositions(joint_model_group, joint_values);
+  kinematic_state_->copyJointGroupPositions(joint_model_group, joint_values);
 
   // Print joint values
   // ROS_INFO("Joint Values from Inverse Kinematics:");
@@ -172,20 +178,20 @@ const geometry_msgs::Pose DynamicPlanner::getFKine(const std::vector<double>& jo
                                                    const std::string&         ee_link_name)
 {
   // Create a RobotState object
-  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  // robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
 
-  // Get the JointModelGroup for the robot
-  const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
+  // // Get the JointModelGroup for the robot
+  // const robot_state::JointModelGroup* joint_model_group = joint_model_group_;
 
   // Set the joint values (angles) for the robot state
   std::vector<double> joint_values_copy = joint_values;
-  kinematic_state->setJointGroupPositions(joint_model_group, joint_values_copy);
+  kinematic_state_->setJointGroupPositions(joint_model_group, joint_values_copy);
 
   // Make sure the state is valid after setting joint values
-  kinematic_state->update();
+  kinematic_state_->update();
 
   // Get the global transform for the end-effector link
-  const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform(ee_link_name);
+  const Eigen::Affine3d& end_effector_state = kinematic_state_->getGlobalLinkTransform(ee_link_name);
 
   // Extract the translation (position) from the Affine3d transform
   Eigen::Vector3d translation_vector = end_effector_state.translation();
@@ -217,14 +223,14 @@ const geometry_msgs::Pose DynamicPlanner::getFKine(const std::vector<double>& jo
 
 const Eigen::MatrixXd DynamicPlanner::getJacobian()
 {
-    // Create a copy of the current joint_model_group_
-  const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
+  // // Create a copy of the current joint_model_group_
+  // const robot_model::JointModelGroup* joint_model_group = joint_model_group_;
 
-  // Create a copy of the kinematic state of the required robot model
-  robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
+  // // Create a copy of the kinematic state of the required robot model
+  // robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(robot_model_));
   
   // Make sure the state is valid after setting joint values
-  kinematic_state->update();
+  kinematic_state_->update();
 
   // The last link name is the chain tip specified in the file .srdf
   // std::vector<std::string> my_list = joint_model_group->getLinkModelNames();
@@ -233,8 +239,8 @@ const Eigen::MatrixXd DynamicPlanner::getJacobian()
   // Get the Geometric Jacobian matrix of the manipulator
   Eigen::MatrixXd jacobian;
   Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
-  kinematic_state->getJacobian(joint_model_group,
-                               kinematic_state->getLinkModel(joint_model_group->getLinkModelNames().back()),
+  kinematic_state_->getJacobian(joint_model_group,
+                               kinematic_state_->getLinkModel(joint_model_group->getLinkModelNames().back()),
                                reference_point_position, jacobian);
   
   // ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");

@@ -7,29 +7,29 @@ add_compile_options(-std=c++11)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-find_package(Eigen3 REQUIRED)
+# find_package(Eigen3 REQUIRED)
 
-if(NOT EIGEN3_INCLUDE_DIRS)
-  set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
-endif()
+# if(NOT EIGEN3_INCLUDE_DIRS)
+#   set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
+# endif()
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   geometry_msgs
   visualization_msgs
-  interactive_markers
+  # interactive_markers
   moveit_core
   moveit_visual_tools
   moveit_ros_planning
   moveit_ros_planning_interface
   pluginlib
-  geometric_shapes
-  pcl_ros
-  pcl_conversions
-  rosbag
+  # geometric_shapes
+  # pcl_ros
+  # pcl_conversions
+  # rosbag
   tf2_ros
-  tf2_eigen
+  # tf2_eigen
   tf2_geometry_msgs
   industrial_trajectory_filters
 )
@@ -44,8 +44,8 @@ catkin_package(
   moveit_core
   moveit_visual_tools
   moveit_ros_planning_interface
-  interactive_markers
-  DEPENDS EIGEN3
+#  interactive_markers
+#  DEPENDS EIGEN3
 )
 
 include_directories(
@@ -53,7 +53,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-include_directories(SYSTEM ${THIS_PACKAGE_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIRS})
+include_directories(SYSTEM ${THIS_PACKAGE_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} )
+# include_directories(${EIGEN3_INCLUDE_DIRS})
 include_directories(${catkin_INCLUDE_DIRS})
 link_directories(${catkin_LIBRARY_DIRS})
 
@@ -66,6 +67,6 @@ add_dependencies(dynamic_planner ${catkin_EXPORTED_TARGETS})
 # target_link_libraries(node_name dynamic_planner ${catkin_LIBRARIES})
 
 ## Install targets
-install(TARGETS 
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# install(TARGETS 
+#  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
