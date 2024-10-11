@@ -577,14 +577,13 @@ double DynamicPlanner::cartesianPlan(const std::vector<geometry_msgs::Pose>& way
   moveit::planning_interface::MoveGroupInterface move_group_interface(
                                                 planning_group_name_);
   // Setup cartesian planner
-  const double jump_threshold = 0.0;  // To avoid IK errors
   double eef_step = params_.max_velocity*params_.sample_time; // Ideal distance step
   double fraction = 0.0;
   ros::Time start = ros::Time::now();
   for (int k = 0; k < params_.num_attempts; k++)
   {
     fraction = move_group_interface.computeCartesianPath(
-                  waypoints, (pow(10,k))*eef_step, jump_threshold, trajectory_);
+                  waypoints, (pow(10,k))*eef_step, trajectory_);
     if (fraction > 0.0) {break;}
   }
   // Resample trajectory time
