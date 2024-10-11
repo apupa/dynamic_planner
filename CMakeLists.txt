@@ -7,11 +7,11 @@ add_compile_options(-std=c++11)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-# find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-# if(NOT EIGEN3_INCLUDE_DIRS)
-#   set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
-# endif()
+if(NOT EIGEN3_INCLUDE_DIRS)
+   set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
+endif()
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -45,7 +45,7 @@ catkin_package(
   moveit_visual_tools
   moveit_ros_planning_interface
 #  interactive_markers
-#  DEPENDS EIGEN3
+  DEPENDS EIGEN3
 )
 
 include_directories(
@@ -54,7 +54,7 @@ include_directories(
 )
 
 include_directories(SYSTEM ${THIS_PACKAGE_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} )
-# include_directories(${EIGEN3_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIRS})
 include_directories(${catkin_INCLUDE_DIRS})
 link_directories(${catkin_LIBRARY_DIRS})
 
