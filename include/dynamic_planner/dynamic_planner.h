@@ -118,7 +118,8 @@ class DynamicPlanner
                     const double max_velocity = 0.5);
 
       // Current joints values 
-      std::vector<double> joints_values_group_;  
+      std::vector<double> joints_values_group_;
+      std::vector<double> joints_speed_group_;
 
     // --------------------- PUBLIC FUNCTIONS ---------------------
 
@@ -230,7 +231,8 @@ class DynamicPlanner
       DynamicPlannerParams params_;
       std::string planning_group_name_;                           // Planning group
       std::vector<std::string> joints_names_group_;               // Joints group names
-      std::unordered_map<std::string, double> joints_map_group_;  // Set group joints names and values through mapping
+      std::unordered_map<std::string, double> joints_map_group_;  // Set group joints names and positions values through mapping
+      std::unordered_map<std::string, double> dq_jts_map_group_;  // Set group joints names and velocity  values through mapping
       bool dynamic_behaviour_;                                    // Set automatic check trajectory within the ROS spinner
 
       // Set joints limit through mapping the name of the configuration with a user defined 

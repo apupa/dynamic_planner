@@ -58,9 +58,13 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
 
   // Initialize joints map for robot state update: per each joint name, set its value to 0
   for (const std::string& name : joints_names_group_)
-    {joints_map_group_[name] = 0;}
+  {
+    joints_map_group_[name] = 0.;
+    dq_jts_map_group_[name] = 0.;
+  }
 
   joints_values_group_.resize(joints_names_group_.size());  // Adjust joints values array size
+  joints_speed_group_.resize(joints_names_group_.size());  // Adjust joints values array size
 
   ros::Rate loop_rate(10);  // ROS loop rate definition, just to check readiness of ros pubs
 
@@ -1183,17 +1187,20 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
 {
   // Map to store couples joint name - joint values
   static std::unordered_map<std::string, double>::iterator it;
+  static std::unordered_map<std::string, double>::iterator it_vel;
   uint counter_group  = 0;
 
   for (uint i = 0; i < joints_state->name.size(); i++)
   {
     // Look for joints group names within joints current state
-    it = joints_map_group_.find(joints_state->name[i]);
+    it     = joints_map_group_.find(joints_state->name[i]);
+    it_vel = dq_jts_map_group_.find(joints_state->name[i]);
     // Exclude last link (gripper) from the search
     if (it != joints_map_group_.end())
     {
       // At the second position of the iteration, insert current joint position
-      it->second = joints_state->position[i];
+      it->second     = joints_state->position[i];
+      it_vel->second = joints_state->velocity[i];
       // Increment the number of joints recevied from the joints state subscriber
       counter_group++;
       // If we have reached the last joint of the group
@@ -1202,7 +1209,8 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
         // Iterate over the joints
         for (uint k = 0; k < joints_names_group_.size(); k++)
           // Store the joints values from the joints map
-          {joints_values_group_[k] = joints_map_group_[joints_names_group_[k]];}
+          {joints_values_group_[k] = joints_map_group_[joints_names_group_[k]];
+           joints_speed_group_[k]  = dq_jts_map_group_[joints_names_group_[k]];}
 
         // Log gripper planning group
         ROS_INFO_ONCE("%s joints values received.", planning_group_name_.c_str());
