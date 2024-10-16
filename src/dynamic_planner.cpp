@@ -173,8 +173,8 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& tar
   kinematic_state_->copyJointGroupPositions(joint_model_group, joint_values);
 
   // Print joint values
-  // ROS_INFO("Joint Values from Inverse Kinematics:");
-  // for (const auto& value : joint_values) {ROS_INFO_STREAM(value);}
+  ROS_INFO("Joint Values from Inverse Kinematics:");
+  for (const auto& value : joint_values) {ROS_INFO_STREAM(value);}
 
   return joint_values;
 }
@@ -183,10 +183,23 @@ const Eigen::MatrixXd DynamicPlanner::pseudoInverse(const Eigen::MatrixXd &M)
 {
   // Compute the pseudoinverse matrix, often used to invert the Jacobian
 
+  // OLD METHOD
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
   double tolerance = std::numeric_limits<double>::epsilon() * std::max(M.cols(), M.rows()) * svd.singularValues().array().abs()(0);
   Eigen::MatrixXd pseudoInv = svd.matrixV() * (svd.singularValues().array().abs() > tolerance).select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal() * svd.matrixU().adjoint();
   
+  // NEW METHOD
+  // Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  // double tolerance = std::numeric_limits<double>::epsilon() * std::max(M.cols(), M.rows()) * svd.singularValues()(0);
+
+  // // Inverse of the singular values with tolerance
+  // Eigen::VectorXd singularValuesInv = svd.singularValues().array().abs().inverse();
+  // singularValuesInv = (svd.singularValues().array().abs() > tolerance)
+  //                     .select(singularValuesInv, 0);
+
+  // // Adjust diagonal matrix dimensions depending on the shape of the input matrix M
+  // Eigen::MatrixXd pseudoInv = svd.matrixV() * singularValuesInv.asDiagonal() * svd.matrixU().transpose();
+
   // ROS_INFO_STREAM("PseudoInverse: \n" << pseudoInv << "\n");
 
   return pseudoInv;
@@ -1058,10 +1071,10 @@ void DynamicPlanner::merge(moveit_msgs::RobotTrajectory& robot_trajectory)
 // Check given goal is different from current pose to avoid planner warning and blocking
 const bool DynamicPlanner::checkJointDiff(const std::vector<double>& final_position)
 {
-  // Set a reasonable threshold
+  // Set a reasonable threshold 
   double th = 0.0001;
   // Counter check: it's increased by 1 if two joint positions are similar
-  uint counter_check = 0;
+  int counter_check = 0;
   // Iterate above all joints
   for(uint k = 0; k < final_position.size(); k++)
   {
@@ -1075,6 +1088,7 @@ const bool DynamicPlanner::checkJointDiff(const std::vector<double>& final_posit
   if (counter_check == final_position.size())
   {
     ROS_WARN("User input error: sent goal state is near or equal to current joint pose.");
+    ROS_WARN("Checked %d out of %ld joints equal to current position.",counter_check,final_position.size());
     return true;
   }
   else
@@ -1181,7 +1195,7 @@ void DynamicPlanner::plan(const std::vector<moveit_msgs::Constraints>& desired_g
 // Visualize on RViz a given trajectory
 void DynamicPlanner::trajectoryVisualizer(moveit_msgs::RobotTrajectory& robot_trajectory)
 {
-    ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
+  ROS_DEBUG("Publishing new trajectory of planning group %s on RViz topic %s..",
                 planning_group_.c_str(), rviz_visual_tools::RVIZ_MARKER_TOPIC.c_str());
     visual_tools_->deleteAllMarkers();
     if (planning_group_ == planning_group_name_)
