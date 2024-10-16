@@ -74,9 +74,28 @@ DynamicPlanner::DynamicPlanner(const std::string& manipulator_name,
     ros::spinOnce();
   }
 
+  // Get all joint groups in the model
+  const std::vector<moveit::core::JointModelGroup*> robot_groups = robot_model_->getJointModelGroups();
+
+  ROS_INFO("Founded %ld groups in the current robot model.", robot_groups.size());
+  for (const auto& r : robot_groups)
+  {
+    std::cout << "Group name: " << r->getName() << std::endl;
+    
+    const std::vector<std::string> joint_names = r->getJointModelNames();
+    
+    for (unsigned int k = 0; k < joint_names.size(); ++k) {
+        std::cout << "Joint " << k << ": " << joint_names[k] << std::endl;
+    }
+  }
+
+  ROS_INFO("Robot's groups search ended");
+
   // Initialize robot state and its joints values
   joint_model_group_ = robot_state_->getJointModelGroup(planning_group_name_);
   robot_state_->setJointGroupPositions(joint_model_group_, joints_values_group_);
+
+  ROS_INFO("Group model initiated");
 
   // Move virtual robot to the initial position
   // sensor_msgs::JointState initial_pose_msg;
@@ -1204,6 +1223,7 @@ void DynamicPlanner::jointsCallback(const sensor_msgs::JointState::ConstPtr& joi
 
       // Increment the number of joints received from the joints state subscriber
       counter_group++;
+
       // If we have reached the last joint of the group
       if (counter_group == joints_names_group_.size())
       {
