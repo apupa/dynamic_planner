@@ -173,8 +173,8 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& tar
   kinematic_state_->copyJointGroupPositions(joint_model_group, joint_values);
 
   // Print joint values
-  ROS_INFO("Joint Values from Inverse Kinematics:");
-  for (const auto& value : joint_values) {ROS_INFO_STREAM(value);}
+  // ROS_INFO("Joint Values from Inverse Kinematics:");
+  // for (const auto& value : joint_values) {ROS_INFO_STREAM(value);}
 
   return joint_values;
 }
