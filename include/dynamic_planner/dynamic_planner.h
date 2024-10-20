@@ -77,8 +77,8 @@
 struct DynamicPlannerParams
 {
   std::string name     = "RRTConnect";        // name of the planner method (look up from list in ompl_planning.yaml)
-  int num_attempts     = 5;                   // max number of attempts to find a trajectory
-  double planning_time = 5;                   // maximum planning time in seconds (default 0: no limit)
+  int num_attempts     = 2;                   // max number of attempts to find a trajectory
+  double planning_time = 2;                   // maximum planning time in seconds (default 0: no limit)
   double vel_factor    = 1.;                  // velocity factor
   double acc_factor    = 1.;                  // acceleration factor
   moveit_msgs::Constraints path_constraints;  // moveit vector of path constraints
@@ -224,6 +224,7 @@ class DynamicPlanner
       ros::Publisher  joints_pub_;    // publisher to moveit fake joints controllers (for RViz visualization)
       ros::Publisher  trajectory_pub_;// trajectory publisher to /trajectory topic
       ros::Publisher  stop_pub_;      // publisher to stop trajectory execution 
+      ros::Publisher  traj_res_pub_;  // publisher to show trajectory computation result
       ros::Subscriber joints_sub_;    // subscriber to joint current states
       ros::Subscriber trajpoint_sub_; // subscriber to the trajectory counter
 

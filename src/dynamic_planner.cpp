@@ -164,13 +164,14 @@ const std::vector<double> DynamicPlanner::invKine(const geometry_msgs::Pose& tar
   std::vector<double> joint_values;
 
   // Perform inverse kinematics to find joint positions
-  kinematic_state_->setFromIK(
+  bool res = kinematic_state_->setFromIK(
                   joint_model_group,  // group of joints to set
                   target_pose,        // the pose the last link in the chain needs to achieve
                   0.001);             // timeout,  default: 0.0 (no timeout)
 
   // Get joint values after successful IK
-  kinematic_state_->copyJointGroupPositions(joint_model_group, joint_values);
+  ROS_INFO("InvKine success: %s",res ? "True" : "False");
+  if (res) {kinematic_state_->copyJointGroupPositions(joint_model_group, joint_values);}
 
   // Print joint values
   // ROS_INFO("Joint Values from Inverse Kinematics:");
@@ -846,8 +847,9 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
   // Setup publishers (for output trajectory)
   joints_pub_     = nh_.advertise<sensor_msgs::JointState>(
                     "/move_group/fake_controller_joint_states", 1);  
-  trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("/trajectory", 1);
+  trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>(planning_group_name_+"/trajectory", 1);
   stop_pub_       = nh_.advertise<std_msgs::Bool>("/stop_trajectory", 1);
+  traj_res_pub_   = nh_.advertise<std_msgs::Bool>(planning_group_name_+"/traj_planning_result", 1);
   // ...and subscribers (for robot status update)
   joints_sub_     = nh_.subscribe("/joint_states", 1, &DynamicPlanner::jointsCallback, this);
   trajpoint_sub_  = nh_.subscribe("/trajectory_counter", 1, &DynamicPlanner::trajPointCallback, this);
@@ -1085,7 +1087,7 @@ const bool DynamicPlanner::checkJointDiff(const std::vector<double>& final_posit
       counter_check++;  // Increment counter check
     }    
   }
-  if (counter_check == final_position.size())
+  if (counter_check == joints_values_group_.size())
   {
     ROS_WARN("User input error: sent goal state is near or equal to current joint pose.");
     ROS_WARN("Checked %d out of %ld joints equal to current position.",counter_check,final_position.size());
@@ -1152,6 +1154,11 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
         moveRobot(trajectory_);
       }
 
+      // Publish topic to communicate the successfull state of trajectory computation
+      std_msgs::Bool msg;
+      msg.data = success_;
+      traj_res_pub_.publish(msg);
+
       break;
     }
   }
@@ -1163,6 +1170,11 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     std_msgs::Bool stop;
     stop.data = true;
     stop_pub_.publish(stop);
+
+    // Publish topic to communicate the failed state of trajectory computation
+    std_msgs::Bool msg;
+    msg.data = success_;
+    traj_res_pub_.publish(msg);
   }
 }
 
