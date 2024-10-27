@@ -814,6 +814,11 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
   {
+    if (stop_msg_)
+    {
+      stop_msg_ = false;
+      break;
+    }
     // Check if the computed trajectory is still clean
     checkTrajectory();
     // Fill the trajecory msg (the fake controller watches only the positions, the real one uses both positions and velocities)
@@ -824,6 +829,11 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     // Trajectory rate waiting
     traj_exec_rate.sleep();
   }
+}
+
+void DynamicPlanner::stopRobotCallback(const std_msgs::Bool& msg)
+{
+  stop_msg_ = msg.data;
 }
 
 // Spin ROS (the loop rate is set in the proper node)
@@ -849,6 +859,7 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
                     "/move_group/fake_controller_joint_states", 1);  
   trajectory_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>(planning_group_name_+"/trajectory", 1);
   stop_pub_       = nh_.advertise<std_msgs::Bool>("/stop_trajectory", 1);
+  stop_sub_       = nh_.subscribe("/stop_trajectory", 1, &DynamicPlanner::stopRobotCallback, this);
   traj_res_pub_   = nh_.advertise<std_msgs::Bool>(planning_group_name_+"/traj_planning_result", 1);
   // ...and subscribers (for robot status update)
   joints_sub_     = nh_.subscribe("/joint_states", 1, &DynamicPlanner::jointsCallback, this);
@@ -1170,6 +1181,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     std_msgs::Bool stop;
     stop.data = true;
     stop_pub_.publish(stop);
+    stop_msg_ = true;
 
     // Publish topic to communicate the failed state of trajectory computation
     std_msgs::Bool msg;

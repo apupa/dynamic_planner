@@ -227,6 +227,7 @@ class DynamicPlanner
       ros::Publisher  traj_res_pub_;  // publisher to show trajectory computation result
       ros::Subscriber joints_sub_;    // subscriber to joint current states
       ros::Subscriber trajpoint_sub_; // subscriber to the trajectory counter
+      ros::Subscriber stop_sub_; // subscriber to the trajectory counter
 
     // Dynamic planner params definition
       DynamicPlannerParams params_;
@@ -283,6 +284,7 @@ class DynamicPlanner
       bool success_;                  // whereas trajectory planning has been successfull
       bool joints_group_received_;    // Check if joints group has been received from the planner
       bool obstruction_;              // wheather an obstacle is on the robot path (1) or not (0)
+      bool stop_msg_;
 
       // Efficiency variables for kine computations
             robot_state::RobotStatePtr kinematic_state_;
@@ -316,6 +318,8 @@ class DynamicPlanner
     void trajPointCallback(const std_msgs::Int32::ConstPtr& traj_point);
     // Joints current state
     void jointsCallback(const sensor_msgs::JointState::ConstPtr& joints_state);
+    // Stop robot msg
+    void stopRobotCallback(const std_msgs::Bool& msg);
 };
 
 #endif /* DYNAMIC_PLANNER_H */
