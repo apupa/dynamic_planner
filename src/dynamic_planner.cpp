@@ -817,6 +817,10 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     if (stop_msg_)
     {
       stop_msg_ = false;
+      for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
+      {
+        trajectory_pose.velocity[k] = 0.;
+      }
       break;
     }
     // Check if the computed trajectory is still clean
