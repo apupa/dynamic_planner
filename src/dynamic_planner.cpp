@@ -798,6 +798,7 @@ void DynamicPlanner::checkTrajectory()
 void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
 {
   joints_pub_.publish(joint_states);
+  ros::spinOnce();
 }
 
 // Move Robot function given a trajectory to compute
@@ -817,9 +818,11 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     if (stop_msg_)
     {
       stop_msg_ = false;
+      trajectory_pose.velocity.clear();
+      
       for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
       {
-        trajectory_pose.velocity[k] = 0.;
+        trajectory_pose.velocity.push_back(0.);
       }
       break;
     }
@@ -838,6 +841,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
 void DynamicPlanner::stopRobotCallback(const std_msgs::Bool& msg)
 {
   stop_msg_ = msg.data;
+  ROS_INFO("Robot stop msg rec: %s", stop_msg_ ? "true" : "false");
 }
 
 // Spin ROS (the loop rate is set in the proper node)
