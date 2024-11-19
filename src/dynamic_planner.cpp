@@ -1121,7 +1121,7 @@ const bool DynamicPlanner::checkJointDiff(const std::vector<double>& final_posit
 // Basic private planning function
 void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bool send)
 {
-  // TODO: the following goal constraints request should be a push back 
+  // TODO: the following goal constraints request should be a push back
   // (this vector should be cleared at the calling of the planning request)
 
   // Set the goal to the MoveIt planning request
