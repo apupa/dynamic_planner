@@ -824,6 +824,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
       {
         trajectory_pose.velocity.push_back(0.);
       }
+      moveRobot(trajectory_pose);
       break;
     }
     // Check if the computed trajectory is still clean
@@ -887,6 +888,9 @@ void DynamicPlanner::initialize(const double v_factor, const double a_factor)
   // Update planner parameters; velocity and acceleration
   params_.vel_factor = v_factor;
   params_.acc_factor = a_factor;
+
+  // Other class params init
+  stop_msg_ = false;
 
   // Setup visual tools to display planned trajectory on RViz
   visual_tools_ = moveit_visual_tools::MoveItVisualToolsPtr(new moveit_visual_tools::MoveItVisualTools(
