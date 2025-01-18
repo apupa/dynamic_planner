@@ -851,6 +851,8 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     // Trajectory rate waiting
     traj_exec_rate.sleep();
   }
+
+  ROS_INFO("Ended MoveRobot Loop");
 }
 
 void DynamicPlanner::stopRobotCallback(const std_msgs::Bool& msg)
@@ -1198,6 +1200,8 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
         // Publish recupersively the robtot pos/vel setpoints
         moveRobot(trajectory_);
       }
+
+      trajecory_.joint_trajectory.points.clear();
 
       break;
     }
