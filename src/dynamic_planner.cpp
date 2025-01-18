@@ -553,6 +553,8 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
                           const std::string& joint_model_group_name,
                           const robot_state::RobotState& robot_state)
 {  
+  ROS_INFO("Hi! I'm the planner V8.");
+
   // Update class global variables
   final_pose_         = final_pose;
   planning_space_     = CARTESIAN_SPACE;
@@ -585,6 +587,7 @@ void DynamicPlanner::plan(const geometry_msgs::PoseStamped& final_pose,
             0.01);        // TOLERANCE ANGLE: the value to assign to the absolute tolerances of the OrientationConstraint!
 
   // Call the dynamic planner private function for a single goal
+  ROS_INFO("Planner V8 ended, passed to the execution.");
   plan(goal_, true);
 }
 
@@ -804,6 +807,8 @@ void DynamicPlanner::moveRobot(const sensor_msgs::JointState& joint_states)
 // Move Robot function given a trajectory to compute
 void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_trajectory)
 {
+  ROS_INFO("Beginning moveRobot Loop!");
+
   // Create a JointState empty variable for the fake controller publisher
   sensor_msgs::JointState trajectory_pose;
   // Fill the name of the joints
@@ -818,13 +823,19 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     if (stop_msg_)
     {
       stop_msg_ = false;
+      trajectory_pose.position = traj_pt.positions;
       trajectory_pose.velocity.clear();
-      
+
+      ROS_INFO("Blocking the robot within the dynamic planner!");
+
       for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
       {
         trajectory_pose.velocity.push_back(0.);
       }
       moveRobot(trajectory_pose);
+
+      ROS_INFO("Dynamic planner has blocked the robot!");
+      
       break;
     }
     // Check if the computed trajectory is still clean
@@ -1128,6 +1139,8 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   // TODO: the following goal constraints request should be a push back
   // (this vector should be cleared at the calling of the planning request)
 
+  ROS_INFO("Hi! I'm in the basic private planning function!");
+
   // Set the goal to the MoveIt planning request
   request_.goal_constraints[0] = desired_goal;
   // Set current robot state in the planning scene
@@ -1159,6 +1172,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     // If planning was SUCCESSFULL
     else
     {
+      ROS_INFO("Successful planning in dynamic planner!");
       success_ = true;
 
       // result_.trajectory_ goes into trajectory_ global class variable
