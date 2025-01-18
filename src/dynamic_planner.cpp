@@ -829,7 +829,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
 
       ROS_INFO("Blocking the robot within the dynamic planner!");
 
-      for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.points.positions.size(); k++)
+      for (unsigned int k = 0; k < traj_pt.positions.size(); k++)
       {
         trajectory_pose.velocity[k] = 0.;
       }
