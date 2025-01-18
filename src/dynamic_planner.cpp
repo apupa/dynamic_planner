@@ -813,11 +813,10 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   sensor_msgs::JointState trajectory_pose;
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
+  ROS_INFO(trajectory_pose.name);
   // Setup the rate of the planner execution
   // Hypothesis: all the points of the trajectory are uniformely sampled in time; if not, thery are forced here
-  ROS_INFO("Dai Ito");
-  ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[0].time_from_start.toSec()));
-  ROS_INFO("Dai Ito");
+  ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
 
   // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
@@ -829,13 +828,14 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
 
       ROS_INFO("Blocking the robot within the dynamic planner!");
 
-      for (unsigned int k = 0; k < traj_pt.positions.size(); k++)
+      for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
       {
         trajectory_pose.velocity[k] = 0.;
       }
 
-      std::cout << trajectory_pose.velocity[5] << std::endl;
-      std::cout << trajectory_pose.position[5] << std::endl;
+        ROS_INFO(trajectory_pose.position);
+        ROS_INFO(trajectory_pose.velocity);
+
 
       moveRobot(trajectory_pose);
 
