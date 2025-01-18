@@ -835,7 +835,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
       moveRobot(trajectory_pose);
 
       ROS_INFO("Dynamic planner has blocked the robot!");
-      
+
       break;
     }
     // Check if the computed trajectory is still clean
@@ -1175,8 +1175,13 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
       ROS_INFO("Successful planning in dynamic planner!");
       success_ = true;
 
+      // Publish topic to communicate the successfull state of trajectory computation
+      std_msgs::Bool msg;
+      msg.data = success_;
+      traj_res_pub_.publish(msg);
+
       // result_.trajectory_ goes into trajectory_ global class variable
-      result_.trajectory_->getRobotTrajectoryMsg(trajectory_);      
+      result_.trajectory_->getRobotTrajectoryMsg(trajectory_); 
 
       // Update trajectory visualization
       trajectoryVisualizer(trajectory_);
@@ -1191,11 +1196,6 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
         moveRobot(trajectory_);
       }
 
-      // Publish topic to communicate the successfull state of trajectory computation
-      std_msgs::Bool msg;
-      msg.data = success_;
-      traj_res_pub_.publish(msg);
-
       break;
     }
   }
@@ -1204,15 +1204,17 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
   if (!success_)
   {
     ROS_ERROR("Too many attempts. I am not able to plan an admissable trajectory.");
-    std_msgs::Bool stop;
-    stop.data = true;
-    stop_pub_.publish(stop);
-    stop_msg_ = true;
 
     // Publish topic to communicate the failed state of trajectory computation
     std_msgs::Bool msg;
     msg.data = success_;
     traj_res_pub_.publish(msg);
+
+    // Stop robot for safety
+    std_msgs::Bool stop;
+    stop.data = true;
+    stop_pub_.publish(stop);
+    stop_msg_ = true;
   }
 }
 
