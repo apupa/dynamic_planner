@@ -1201,7 +1201,7 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
         moveRobot(trajectory_);
       }
 
-      trajecory_.joint_trajectory.points.clear();
+      trajectory_.joint_trajectory.points.clear();
 
       break;
     }
