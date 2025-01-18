@@ -813,7 +813,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   sensor_msgs::JointState trajectory_pose;
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
-  ROS_INFO("%s",trajectory_pose.name[5]);
+  std::cout << trajectory_pose.name[5] << std::endl;
   // Setup the rate of the planner execution
   // Hypothesis: all the points of the trajectory are uniformely sampled in time; if not, thery are forced here
   ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
@@ -833,8 +833,8 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
         trajectory_pose.velocity[k] = 0.;
       }
 
-        ROS_INFO("%f",trajectory_pose.position[5]);
-        ROS_INFO("%f",trajectory_pose.velocity[5]);
+        std::cout << trajectory_pose.position[5] << std::endl;
+        std::cout << trajectory_pose.velocity[5] << std::endl;
 
 
       moveRobot(trajectory_pose);
