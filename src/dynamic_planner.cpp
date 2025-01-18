@@ -808,7 +808,6 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   sensor_msgs::JointState trajectory_pose;
   // Fill the name of the joints
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
-  std::cout << trajectory_pose.name[5] << std::endl;
   // Setup the rate of the planner execution
   // Hypothesis: all the points of the trajectory are uniformely sampled in time; if not, thery are forced here
   ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
@@ -820,22 +819,11 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     {
       stop_msg_ = false;
       trajectory_pose.position = traj_pt.positions;
-
-      ROS_INFO("Blocking the robot within the dynamic planner!");
-
       for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
       {
         trajectory_pose.velocity[k] = 0.;
       }
-
-        std::cout << trajectory_pose.position[5] << std::endl;
-        std::cout << trajectory_pose.velocity[5] << std::endl;
-
-
       moveRobot(trajectory_pose);
-
-      ROS_INFO("Dynamic planner has blocked the robot!");
-
       break;
     }
     // Check if the computed trajectory is still clean
@@ -848,8 +836,6 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
     // Trajectory rate waiting
     traj_exec_rate.sleep();
   }
-
-  ROS_INFO("Ended MoveRobot Loop");
 }
 
 void DynamicPlanner::stopRobotCallback(const std_msgs::Bool& msg)
