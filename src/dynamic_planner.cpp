@@ -815,7 +815,9 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
   trajectory_pose.name = robot_trajectory.joint_trajectory.joint_names;
   // Setup the rate of the planner execution
   // Hypothesis: all the points of the trajectory are uniformely sampled in time; if not, thery are forced here
-  ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[1].time_from_start.toSec()));
+  ROS_INFO("Dai Ito");
+  ros::Rate traj_exec_rate(1/(robot_trajectory.joint_trajectory.points[0].time_from_start.toSec()));
+  ROS_INFO("Dai Ito");
 
   // MoveRobot function is called per each following point of the whole trajectory, to visualize each point on RViz
   for (const auto& traj_pt : robot_trajectory.joint_trajectory.points)
@@ -827,7 +829,7 @@ void DynamicPlanner::moveRobot(const moveit_msgs::RobotTrajectory& robot_traject
 
       ROS_INFO("Blocking the robot within the dynamic planner!");
 
-      for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.joint_names.size(); k++)
+      for (unsigned int k = 0; k < robot_trajectory.joint_trajectory.points.positions.size(); k++)
       {
         trajectory_pose.velocity[k] = 0.;
       }
@@ -1216,12 +1218,6 @@ void DynamicPlanner::plan(const moveit_msgs::Constraints& desired_goal, const bo
     std_msgs::Bool msg;
     msg.data = success_;
     traj_res_pub_.publish(msg);
-
-    // Stop robot for safety
-    std_msgs::Bool stop;
-    stop.data = true;
-    stop_pub_.publish(stop);
-    stop_msg_ = true;
   }
 }
 
